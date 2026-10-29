@@ -112,6 +112,13 @@ def test_source_url_keeps_subdocument_slash():
         "https://namu.wiki/w/%EC%95%84%EC%9D%B4%EC%9C%A0/%EC%97%AC%EB%8B%B4")
 
 
+def test_unknown_content_index_is_rejected(engine, derived):
+    with pytest.raises(ValueError):
+        load(engine, str(derived), content_index="fts")
+    assert main(["--input", str(derived), "--database-url", "sqlite://",
+                 "--content-index", "none", "--quiet"]) == 2
+
+
 def test_cli_rejects_non_postgres_url(derived, capsys):
     code = main(["--input", str(derived), "--database-url", "sqlite:///secret.db", "--quiet"])
     assert code == 2
@@ -136,8 +143,18 @@ def test_real_postgres_load():
         second = load(engine, str(tmp))
         assert first["profiles"] == second["profiles"] == 6
         assert second["search_index"] in ("pg_trgm", "fts_simple")
+        assert second["content_index"] == "none"
+        index_sql = text("SELECT indexname FROM pg_indexes WHERE schemaname = :s")
         with engine.connect() as c:
             assert c.execute(text("SELECT count(*) FROM star_chunks")).scalar() == second["chunks"]
+            names = set(c.execute(index_sql, {"s": schema}).scalars())
+        assert "ix_star_profiles_debut_year" in names
+        assert not {n for n in names if n.startswith("ix_star_chunks_content")}
+        third = load(engine, str(tmp), content_index="trgm")
+        with engine.connect() as c:
+            names = set(c.execute(index_sql, {"s": schema}).scalars())
+        assert third["content_index"] == "trgm"
+        assert {n for n in names if n.startswith("ix_star_chunks_content")}
     finally:
         engine.dispose()
         with admin.begin() as c:

@@ -116,10 +116,13 @@ python -m scripts.namuwiki.load --input data/namu --database-url "$DATABASE_URL"
 | `--database-url` | PostgreSQL 주소. 생략하면 환경 변수 `DATABASE_URL` |
 | `--limit` | 앞에서부터 스타 N건만 넣음 (그룹 → 인물 순서). 확인용 |
 | `--batch` | INSERT 한 번에 보낼 행 수 (기본 1000) |
+| `--content-index` | 조각 본문(`star_chunks.content`) 검색 인덱스. `none`(기본) 또는 `trgm` |
 | `--quiet` | 진행 로그를 끔 |
 
 - 실행할 때마다 두 테이블을 비우고 다시 채웁니다. 전체가 트랜잭션 하나라서 중간에 실패하면 이전 데이터가 그대로 남습니다. 적재하는 동안에는 두 테이블을 읽는 쿼리가 기다립니다.
 - 테이블이 없으면 만듭니다. `pg_trgm` 확장은 `CREATE EXTENSION IF NOT EXISTS` 로 시도하고, 권한이 없으면 `simple` 전문 검색 인덱스로 대신합니다.
+- 인덱스는 이름 검색용(`title`, `aliases`)과 조건 검색용(`kind`·`gender`, `debut_year`, `birth_year`)만 기본으로 만듭니다. 크기가 작습니다.
+- 조각 본문 인덱스는 `--content-index trgm` 을 줄 때만 만듭니다. 전체 덤프에서 이 인덱스 하나가 299MB 로 테이블(234MB)보다 커서 기본값에서 뺐습니다. 채팅 검색은 출생지·성별·데뷔연도 같은 조건으로 먼저 스타를 추린 뒤 그 스타들의 조각만 훑기 때문에 본문 인덱스 없이도 빠릅니다(아래 "채팅 검색" 참고).
 - 오류가 나도 DB 주소나 드라이버 메시지는 출력하지 않습니다(비밀번호가 들어 있을 수 있어서).
 
 ### 정제 규칙 (`clean.py`)
@@ -178,13 +181,15 @@ python -m scripts.namuwiki.load --input data/namu --database-url "$DATABASE_URL"
 | `star_profiles` | 20,692행 (인물 19,138 · 그룹 1,554) |
 | `star_chunks` | 179,464행 (하위 문서 4,832건 포함, 5,636건은 제외 규칙으로 뺌) |
 | 조각 길이 | 평균 620자, 중앙값 641자, 최대 1000자 |
-| `star_chunks` 크기 (`pg_total_relation_size`) | 547MB (테이블 234MB + 인덱스 308MB, 그중 본문 `pg_trgm` 인덱스 299MB) |
-| `star_profiles` 크기 | 9.7MB |
-| 실행 시간 | 약 3분 43초 (CPU 2분 36초, 메모리 최대 약 132MB). 행 넣기 약 2분 40초, 검색 인덱스 약 1분 |
+| `star_chunks` 크기 (`pg_total_relation_size`, 기본 `--content-index none`) | 249MB (테이블 234MB + 인덱스 약 10MB) |
+| `star_chunks` 크기 (`--content-index trgm`) | 547MB (테이블 234MB + 인덱스 308MB, 그중 본문 `pg_trgm` 인덱스 299MB) |
+| `star_profiles` 크기 | 약 10MB (이름 `pg_trgm` 인덱스 2개 약 4.6MB, 조건 검색 인덱스 3개 0.5MB 포함) |
+| DB 전체 (`pg_database_size`, 기본 옵션) | 266MB |
+| 실행 시간 | 본문 인덱스 없이 약 2분 53초 (CPU 2분 49초, 메모리 최대 약 130MB). 본문 인덱스를 만들면 약 1분이 더 걸려 약 3분 43초 |
 | 다시 적재 | 같은 명령을 한 번 더 돌려 약 3분 56초. 행 수, `id` 범위(1부터), 테이블 크기가 첫 적재와 같았습니다 |
 
 인물 19,138명 중 값이 들어간 수: 성별 18,133 · 출생연도 17,870 · 데뷔연도 14,416 · 키 12,755 · 출생지 11,452 · 소속사 10,597 · 소속 그룹 4,750.
 
-본문 `pg_trgm` 인덱스가 테이블보다 큽니다. 배포 DB 용량이 모자라면 이 인덱스를 빼거나 하위 문서를 빼고 넣는 방법을 검토해야 합니다.
+본문 `pg_trgm` 인덱스는 테이블보다 커서 기본으로 만들지 않습니다. 조건 없이 단어만으로 전체 본문을 찾는 검색이 꼭 필요해지면 `--content-index trgm` 으로 다시 적재합니다.
 
 테스트는 저장소 루트에서 `pytest -q tests/namuwiki` 로 돌립니다. 실제 덤프 없이 샘플만 씁니다. 적재 테스트는 SQLite 메모리 DB 를 쓰고, `TEST_POSTGRES_URL` 이 있으면 PostgreSQL 에 임시 스키마를 만들어 실제로 적재해 봅니다.
