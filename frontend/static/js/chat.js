@@ -302,6 +302,18 @@
     setSidebarOpen(!sidebar?.classList.contains("is-open"));
   });
 
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && sidebar?.classList.contains("is-open")) {
+      setSidebarOpen(false);
+      menuToggle?.focus();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!sidebar?.classList.contains("is-open")) return;
+    if (sidebar.contains(event.target) || menuToggle?.contains(event.target)) return;
+    setSidebarOpen(false);
+  });
 
   loadCurrentUser();
   loadHistory();
