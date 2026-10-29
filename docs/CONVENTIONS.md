@@ -5,7 +5,7 @@
 - `main`: 배포 기준 브랜치입니다. `develop`에서 릴리스 PR로만 반영하며, 배포는 `main`에 반영된 코드로 진행합니다.
 - `develop`: 통합 브랜치입니다. 모든 작업 브랜치는 PR을 통해 `develop`에 병합합니다.
 - `docs/setup-all`: 문서 변경을 모아 작업하는 브랜치입니다. 기능 브랜치에서 개별적으로 문서를 수정하지 않고, 문서 변경은 팀이 이 브랜치에서 함께 정리한 뒤 PR로 `develop`에 병합합니다.
-- `frontend/<주제>`, `backend/<주제>`: 기능별 작업 브랜치로 사용합니다. `chore/<주제>`는 워크플로·설정 같은 잡무에 사용합니다.
+- `frontend/<주제>`, `backend/<주제>`: 기능별 작업 브랜치로 사용합니다. `data/<주제>`는 나무위키 자료 추출·적재, `chore/<주제>`는 워크플로·설정 같은 잡무에 사용합니다.
 - `main`과 `develop`에는 직접 push하지 않고 PR로만 반영합니다. PR과 병합 기록을 저장소에 남깁니다.
 - 작업 브랜치에 `develop`의 최신 변경이 필요하면 `develop`을 작업 브랜치에 머지해서 가져옵니다. 이미 push한 커밋은 rebase나 force push로 고치지 않습니다.
 - 배포 전에는 `develop` → `main` 릴리스 PR을 만들어 검토하고 병합한 뒤 배포합니다.
@@ -30,6 +30,7 @@
 | 입력 검증·오류 처리 | `backend/validation-errors` |
 | 로깅 | `backend/request-logging` |
 | 배포 설정 | `backend/deployment` |
+| 나무위키 추출·적재 | `data/namu-extract`, `data/namu-load` |
 | 협업 자동화(CI·라벨) | `chore/collab-automation` |
 
 문서 변경은 주제(프로젝트 개요, 아키텍처, API, DB, 배포, 팀 기여 등)와 상관없이 별도 브랜치를 만들지 않고 `docs/setup-all` 브랜치에서 함께 정리합니다.
@@ -49,7 +50,7 @@ refactor: 설정 로딩 코드 정리
 
 사용하는 type은 `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `merge`입니다. `develop`을 작업 브랜치에 가져오는 머지 커밋은 `merge: develop 최신 변경 반영`처럼 적습니다.
 
-기능 변경은 작고 검토하기 쉬운 단위로 커밋합니다. 과제 요구에 따라 팀원별 유의미한 커밋을 10회 이상 남깁니다.
+기능 변경은 작고 검토하기 쉬운 단위로 커밋합니다.
 
 ## 라벨 규칙
 
@@ -126,4 +127,14 @@ PR의 대상 브랜치는 기본적으로 `develop`이고, 배포용 릴리스 P
 
 ## 문서 위치
 
-저장소의 `docs/`에는 API, ARCHITECTURE, DATABASE, CONVENTIONS, DEPLOY, CONTRIBUTORS 문서만 둡니다. 개인 메모는 각자 로컬에 둡니다.
+저장소의 `docs/`에는 아래 문서와 README용 화면 캡처(`docs/images/`)만 둡니다. 개인 메모는 각자 로컬에 둡니다.
+
+| 문서 | 내용 |
+| --- | --- |
+| `API.md` | 엔드포인트별 요청·응답과 오류 |
+| `ARCHITECTURE.md` | 시스템 구조, 계층 역할, 질문 처리 흐름 |
+| `DATABASE.md` | 테이블과 필드, 인덱스, 대화 로그 확인 방법 |
+| `DATA.md` | 나무위키 자료 출처·라이선스, 추출·정제·적재, 채팅 검색 규칙 |
+| `DEPLOY.md` | Railway 설정, 환경 변수, 배포 확인, 롤백 |
+| `CONVENTIONS.md` | 브랜치, 커밋, 라벨, 머지 조건, PR 규칙 |
+| `CONTRIBUTORS.md` | 팀 구성과 개인별 작업 |
