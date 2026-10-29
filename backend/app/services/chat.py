@@ -15,7 +15,13 @@ from sqlalchemy.orm import Session
 from ..crud.chat_logs import recent_chat_pairs, save_chat_log
 from ..models import utc_now
 from .ai_client import AIError, ask_ai
-from .star_search import StarSearchResult, format_reference, search_stars, source_line
+from .star_search import (
+    StarSearchResult,
+    format_reference,
+    remove_source_lines,
+    search_stars,
+    source_line,
+)
 
 logger = logging.getLogger("next_star_hunter")
 CONTEXT_PAIRS = 5
@@ -54,9 +60,10 @@ def answer_question(db: Session, settings, user_id: int, message: str, *,
         raise
     latency_ms = int((time.monotonic() - started) * 1000)
     logger.info("ai_call_success request_id=%s latency_ms=%s", request_id, latency_ms)
-    credit = source_line(found)
+    credit = source_line(found, answer)
     if credit:
-        answer = answer + "\n\n" + credit
+        # The model may copy a source line from the history; the server adds the only one.
+        answer = remove_source_lines(answer) + "\n\n" + credit
 
     created_at = utc_now()
     try:
