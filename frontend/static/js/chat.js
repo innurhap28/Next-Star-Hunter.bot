@@ -22,7 +22,7 @@
   const SIDEBAR_LIMIT = 20;
   const NETWORK_ERROR = "서버에 연결할 수 없습니다. FastAPI 서버에서 페이지를 열었는지 확인해 주세요.";
   const errorMessages = {
-    AI_TIMEOUT: "응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
+    AI_TIMEOUT: "현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
     AI_ERROR: "AI 답변을 받지 못했어요. 잠시 후 다시 시도해 주세요.",
     AI_NOT_CONFIGURED: "AI 연결 설정이 아직 준비되지 않았어요. 관리자에게 알려 주세요.",
     DB_UNAVAILABLE: "서버 저장소에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
@@ -54,7 +54,8 @@
 
   const describeError = (error) => {
     if (error instanceof TypeError) return NETWORK_ERROR;
-    return errorMessages[error.code] || error.message || "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    const text = errorMessages[error.code] || error.message || "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    return error.code ? `${text} (error: ${error.code})` : text;
   };
 
   const formatTime = (value) => {
