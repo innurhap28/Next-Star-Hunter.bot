@@ -60,7 +60,7 @@ def answer_question(db: Session, settings, user_id: int, message: str, *,
         raise
     latency_ms = int((time.monotonic() - started) * 1000)
     logger.info("ai_call_success request_id=%s latency_ms=%s", request_id, latency_ms)
-    credit = source_line(found)
+    credit = source_line(found, answer)
     if credit:
         # The model may copy a source line from the history; the server adds the only one.
         answer = remove_source_lines(answer) + "\n\n" + credit

@@ -362,6 +362,7 @@ def _star(row: dict, snippets: list, members: Optional[list[str]] = None) -> dic
     star = {k: row.get(k) for k in ("title", "kind", "group_name", "gender", "birth_year",
                                     "debut_year", "birthplace", "agency", "height_cm",
                                     "source_url")}
+    star["aliases"] = [a for a in (row.get("aliases") or "").split("\n") if a]
     star["snippets"] = [{"section": s, "text": _snippet(c, k)} for s, c, k in
                         snippets[:MAX_SNIPPETS]]
     if members:
@@ -556,8 +557,24 @@ def remove_source_lines(text: str) -> str:
     return "\n".join(lines).rstrip()
 
 
-def source_line(result: StarSearchResult) -> str:
-    """Attribution appended to the answer by the server ('' when nothing was used)."""
+def _name_forms(star: dict) -> list[str]:
+    forms = [star["title"], *(star.get("aliases") or [])]
+    forms += [re.sub(r"\s*\([^)]*\)\s*$", "", f) for f in list(forms)]
+    return [f.strip() for f in forms if f and f.strip()]
+
+
+def source_line(result: StarSearchResult, answer: Optional[str] = None) -> str:
+    """Attribution appended to the answer by the server ('' when nothing was used).
+
+    With an answer, only stars named in it are listed (title, alias, or the title without
+    its parenthesized part); when none are named, every hit used as a reference is listed.
+    """
     if not result.stars:
         return ""
-    return "출처: 나무위키(CC BY-NC-SA 2.0 KR) - " + ", ".join(result.names)
+    names = result.names
+    if answer is not None:
+        shown = [s["title"] for s in result.stars
+                 if any(f in answer for f in _name_forms(s))]
+        names = shown or names
+    names = list(dict.fromkeys(names))
+    return "출처: 나무위키(CC BY-NC-SA 2.0 KR) - " + ", ".join(names)
