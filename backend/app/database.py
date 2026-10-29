@@ -3,13 +3,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
+
 class Base(DeclarativeBase):
     pass
 
 def build_engine(database_url: str):
     try:
         url = make_url(database_url)
-        valid = url.drivername in {"postgres", "postgresql", "postgresql+psycopg"} and bool(url.database)
+        drivers = {"postgres", "postgresql", "postgresql+psycopg"}
+        valid = url.drivername in drivers and bool(url.database)
         url = url.set(drivername="postgresql+psycopg")
     except Exception:
         valid = False
