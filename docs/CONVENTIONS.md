@@ -2,10 +2,13 @@
 
 ## 브랜치 전략
 
-- `main`: 통합 가능한 기준 브랜치입니다. 초기 FastAPI 실행 기반처럼 팀장이 맡기로 한 초기 작업은 합의된 범위에서 `main`에 반영합니다.
-- `docs/setup-all`: 문서 변경을 모아 작업하는 브랜치입니다. 기능 브랜치에서 개별적으로 문서를 수정하지 않고, 문서 변경은 팀이 이 브랜치에서 함께 정리합니다.
-- `frontend/<주제>` 및 `backend/<주제>`: 기능별 작업 브랜치로 사용합니다.
-- 기능 작업은 가능한 한 작업 브랜치에서 진행하고 PR을 통해 `main`에 병합합니다. PR과 병합 기록을 저장소에 남깁니다.
+- `main`: 배포 기준 브랜치입니다. `develop`에서 릴리스 PR로만 반영하며, 배포는 `main`에 반영된 코드로 진행합니다.
+- `develop`: 통합 브랜치입니다. 모든 작업 브랜치는 PR을 통해 `develop`에 병합합니다.
+- `docs/setup-all`: 문서 변경을 모아 작업하는 브랜치입니다. 기능 브랜치에서 개별적으로 문서를 수정하지 않고, 문서 변경은 팀이 이 브랜치에서 함께 정리한 뒤 PR로 `develop`에 병합합니다.
+- `frontend/<주제>`, `backend/<주제>`, `chore/<주제>`: 기능별 작업 브랜치로 사용합니다.
+- `main`과 `develop`에는 직접 push하지 않고 PR로만 반영합니다. PR과 병합 기록을 저장소에 남깁니다.
+- 작업 브랜치에 `develop`의 최신 변경이 필요하면 `develop`을 작업 브랜치에 머지해서 가져옵니다. 이미 push한 커밋은 rebase나 force push로 고치지 않습니다.
+- 배포 전에는 `develop` → `main` 릴리스 PR을 만들어 검토하고 병합한 뒤 배포합니다.
 
 ## 브랜치 이름 예시
 
@@ -27,8 +30,10 @@
 | 입력 검증·오류 처리 | `backend/validation-errors` |
 | 로깅 | `backend/request-logging` |
 | 배포 설정 | `backend/deployment` |
+| 협업 자동화(CI·라벨) | `chore/collab-automation` |
+| 배포 런북 | `chore/deploy-runbook` |
 
-문서 주제(프로젝트 개요, 아키텍처, API, DB, 팀 기여 등)가 달라도 별도 브랜치를 만들지 않고 현재 사용 중인 `docs/setup-all` 브랜치에서 함께 정리합니다.
+문서 주제(프로젝트 개요, 아키텍처, API, DB, 배포, 팀 기여 등)가 달라도 별도 브랜치를 만들지 않고 현재 사용 중인 `docs/setup-all` 브랜치에서 함께 정리합니다.
 
 ## 커밋 메시지
 
@@ -42,6 +47,8 @@ fix: health 응답 형식 수정
 docs: API 명세 초안 작성
 refactor: 설정 로딩 코드 정리
 ```
+
+사용하는 type은 `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `merge`입니다. `develop`을 작업 브랜치에 가져오는 머지 커밋은 `merge: develop 최신 변경 반영`처럼 적습니다.
 
 기능 변경은 작고 검토하기 쉬운 단위로 커밋합니다. 과제 요구에 따라 팀원별 유의미한 커밋을 10회 이상 남깁니다.
 
@@ -92,7 +99,7 @@ refactor: 설정 로딩 코드 정리
 
 ## Pull Request
 
-PR에는 변경 목적, 주요 수정 사항, 확인 방법을 적습니다. 화면이나 API 응답이 바뀌면 예시 또는 캡처를 포함하고, 검토 후 병합합니다.
+PR의 대상 브랜치는 기본적으로 `develop`이고, 배포용 릴리스 PR만 `main`을 대상으로 합니다. PR에는 변경 목적, 주요 수정 사항, 확인 방법을 적습니다. 화면이나 API 응답이 바뀌면 예시 또는 캡처를 포함하고, 검토 후 병합합니다.
 
 ```markdown
 ## 작업 목적
@@ -124,4 +131,4 @@ PR에는 변경 목적, 주요 수정 사항, 확인 방법을 적습니다. 화
 
 ## 문서 위치
 
-설계 문서(`design/`)와 구현 계획 문서는 저장소에 넣지 않고 팀 공유 드라이브나 각자 로컬에 둡니다. 저장소의 `docs/`에는 제품 문서만 둡니다: API, ARCHITECTURE, DATABASE, CONVENTIONS, CONTRIBUTORS.
+설계 문서(`design/`)와 구현 계획 문서는 저장소에 넣지 않고 팀 공유 드라이브나 각자 로컬에 둡니다. 저장소의 `docs/`에는 제품 문서만 둡니다: API, ARCHITECTURE, DATABASE, CONVENTIONS, DEPLOY, CONTRIBUTORS.
