@@ -17,12 +17,23 @@
     panels.forEach((panel) => { panel.hidden = panel.dataset.authPanel !== name; });
   };
 
+  const fieldMessages = {
+    email: "이메일 형식을 확인해 주세요.",
+    password: "비밀번호는 8자 이상 128자 이하로 입력해 주세요. 공백만으로는 만들 수 없습니다.",
+  };
+
   const readResponse = async (response) => {
     if (response.status === 204) return null;
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const error = new Error(body.message || "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      // VALIDATION_ERROR lists invalid inputs as ["body", "<field>"] without echoing their values.
+      const fields = (Array.isArray(body.fields) ? body.fields : [])
+        .map((loc) => (Array.isArray(loc) ? loc[loc.length - 1] : loc))
+        .filter((name) => typeof name === "string");
+      const fieldMessage = fields.map((name) => fieldMessages[name]).find(Boolean);
+      const error = new Error(fieldMessage || body.message || "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
       error.status = response.status;
+      error.fields = fields;
       throw error;
     }
     return body;
@@ -94,6 +105,8 @@
         window.setTimeout(() => window.location.assign("/"), 350);
       } catch (error) {
         setMessage(error instanceof TypeError ? explainNetworkError() : error.message, true);
+        const invalidInput = (error.fields || []).map((name) => form.elements[name]).find(Boolean);
+        invalidInput?.focus();
       } finally {
         submitButton.disabled = false;
       }
