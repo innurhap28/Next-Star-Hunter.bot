@@ -273,7 +273,7 @@ HTTP 422
 | 422 | `VALIDATION_ERROR` | 빈 질문, 1000자 초과, 알 수 없는 필드 |
 | 502 | `AI_ERROR` | AI API 오류 응답, 연결 실패, 빈 응답, 응답 형식 오류 |
 | 503 | `AI_NOT_CONFIGURED` | `LLM_API_KEY` 없음. 메시지는 "서버 AI 설정을 확인해주세요." |
-| 503 | `DB_UNAVAILABLE` | 최근 대화 조회 등 DB 요청 실패 |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 (최근 대화 조회 등 DB 요청 실패 포함) |
 | 504 | `AI_TIMEOUT` | AI API 응답 시간 초과 |
 
 AI 호출이 실패하면 질문을 저장하지 않으므로 같은 질문을 다시 보내면 됩니다. 스타 검색이 실패하거나 결과가 없으면 오류로 보지 않고 참고 자료 없이 답합니다.
@@ -335,6 +335,6 @@ HTTP 422
 | 401 | `LOGIN_REQUIRED` | 로그인하지 않음 |
 | 401 | `SESSION_REPLACED` | 다른 곳에서 로그인해 이 세션이 끊김 |
 | 422 | `VALIDATION_ERROR` | `limit`이 범위를 벗어나거나 정수가 아님 |
-| 503 | `DB_UNAVAILABLE` | DB 요청 실패 |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 |
 
 DB에서 직접 확인하는 방법은 [README](../README.md#sql로-확인하기)에 있습니다.

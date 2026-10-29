@@ -55,7 +55,7 @@
 
 ![다른 곳 로그인 안내](docs/images/session-replaced.png)
 
-같은 계정으로 다른 브라우저에서 로그인하면 이전 브라우저의 다음 요청은 `401 SESSION_REPLACED`를 받고, 로그인 화면으로 이동해 안내 문구를 보여 줍니다.
+같은 계정으로 다른 브라우저에서 로그인하면 이전 브라우저의 API 요청은 `401 SESSION_REPLACED`를 받고, 화면을 새로고침하면 `/auth?reason=session_replaced`로 이동해 안내 문구를 보여 줍니다.
 
 ### AI 응답 지연 안내
 
@@ -216,19 +216,13 @@ AI 호출이 실패한 질문은 저장하지 않습니다. AI 답변은 받았�
 psql "postgresql://<사용자>:<비밀번호>@<호스트>:<포트>/<DB>" -v email='demo.user@example.com' -f scripts/check_logs.sql
 ```
 
-위 화면 캡처의 두 질문이 저장된 계정으로 조회하면 다음과 같이 나옵니다.
+화면 캡처의 두 질문이 저장된 시연용 DB에서 첫 번째 쿼리(사용자별 대화 수)를 실행한 실제 출력입니다. 두 번째 쿼리(최근 20건)는 위처럼 `-v email=...`를 넘겨야 실행되며, 질문·답변이 앞 50자로 잘려 나옵니다.
 
 ```
  user_id |         email         | chat_count |         last_chat_at
 ---------+-----------------------+------------+-------------------------------
-       1 | demo.user@example.com |          2 | 2026-10-30 07:42:19.508113+00
+       1 | demo.user@example.com |          2 | 2026-10-29 22:52:15.292162+00
 (1 row)
-
- id |          created_at           |                 question                  |                                    answer
-----+-------------------------------+-------------------------------------------+------------------------------------------------------------------------------
-  2 | 2026-10-30 07:42:19.508113+00 | 그중에 제일 최근에 데뷔한 사람은 누구야? | 자료에서 확인되는 데뷔 연도를 보면 조유리가 2018년으로 셋 중 가장 최근에 데뷔했어요.
-  1 | 2026-10-30 07:41:15.917402+00 | 안경 쓴 부산 출신 아이돌 추천해줘         | 부산 출신에 안경 착용으로 유명한 분들이 자료에 몇 명 있어요. 조유리는 IZ*ONE 출신
-(2 rows)
 ```
 
 ### API로 확인하기
@@ -282,6 +276,8 @@ curl -s -b cookies.txt "$BASE/api/me/chats?limit=2"
 | `db_save_success` | 회원가입(`action=register`), 대화 저장 | `user_id`, `chat_id`, `request_id` |
 | `db_save_failure` | 대화 저장 실패 (답변은 `saved: false`로 반환) | `user_id`, `request_id`, `error_type` |
 | `db_operation_failure` | 그 밖의 DB 오류 (`503 DB_UNAVAILABLE`) | `request_id`, `error_type` |
+| `star_search_fallback_timeout` | 드문 단어의 전체 조각 검색이 제한 시간(150ms)을 넘겨 못 찾은 것으로 처리 | 없음 |
+| `log_file_open_failure` | `LOG_FILE_PATH` 파일을 열지 못해 파일 로그 없이 표준 출력만 사용 (서버는 계속 실행) | `path`, `error_type` |
 
 `request_id`는 요청마다 만드는 UUID이고 응답 헤더 `X-Request-ID`로도 돌려줍니다. 요청에 UUID 형식의 `X-Request-ID`를 보내면 그 값을 그대로 씁니다. 사용자가 겪은 오류의 요청 ID로 같은 요청의 로그를 모두 찾을 수 있고, `db_save_success`의 `chat_id`는 `chat_logs.id`라서 서버 로그와 DB 행을 연결할 수 있습니다.
 
@@ -299,49 +295,43 @@ curl -s -b cookies.txt "$BASE/api/me/chats?limit=2"
 
 AI 서버가 보낸 오류 본문은 사용자에게 넘기지 않고 정해진 코드와 문구만 보냅니다. 화면은 안내 문구 뒤에 `(error: AI_TIMEOUT)`처럼 오류 코드를 함께 표시합니다. 계정 API의 오류(`EMAIL_EXISTS`, `INVALID_CREDENTIALS`, `ORIGIN_NOT_ALLOWED`, `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`)는 [docs/API.md](docs/API.md#오류-응답)에 있습니다.
 
-아래는 `LOG_FILE_PATH=logs/app.log`로 로컬에서 실행했을 때의 로그 예시입니다. 파일에는 앱 로그(`next_star_hunter`)만 남고, 요청 ID와 시각, 소요 시간은 실행마다 다릅니다.
+아래는 `LOG_FILE_PATH`를 지정하지 않고 로컬에서 서버를 실행했을 때 표준 출력에 남은 로그의 일부(로컬 실행 로그 일부)입니다. 정적 파일 요청 같은 관련 없는 줄은 뺐고 나머지는 그대로입니다. 요청 ID와 시각, 소요 시간은 실행마다 다릅니다.
 
 ### 정상 응답
 
-```bash
-grep 6934f23d-c75c-40f6-9e5c-15644ac0ceed logs/app.log
-```
+질문 하나의 `request_id`로 그 요청의 로그만 골라 본 것입니다. 로그 파일을 쓸 때는 `grep <request_id> logs/app.log`로 같은 결과를 얻습니다.
 
 ```
-2026-10-30 16:41:07,512 INFO next_star_hunter request_received method=POST path=/api/chat request_id=6934f23d-c75c-40f6-9e5c-15644ac0ceed
-2026-10-30 16:41:07,561 INFO next_star_hunter star_search_done request_id=6934f23d-c75c-40f6-9e5c-15644ac0ceed hits=5 latency_ms=42
-2026-10-30 16:41:07,562 INFO next_star_hunter ai_call_start user_id=1 request_id=6934f23d-c75c-40f6-9e5c-15644ac0ceed
-2026-10-30 16:41:15,904 INFO next_star_hunter ai_call_success request_id=6934f23d-c75c-40f6-9e5c-15644ac0ceed latency_ms=8342
-2026-10-30 16:41:15,918 INFO next_star_hunter db_save_success user_id=1 chat_id=1 request_id=6934f23d-c75c-40f6-9e5c-15644ac0ceed
+2026-10-30 07:52:03,543 INFO next_star_hunter request_received method=POST path=/api/chat request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab
+2026-10-30 07:52:03,605 INFO next_star_hunter star_search_done request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab hits=5 latency_ms=54
+2026-10-30 07:52:03,605 INFO next_star_hunter ai_call_start user_id=1 request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab
+2026-10-30 07:52:10,865 INFO next_star_hunter ai_call_success request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab latency_ms=7260
+2026-10-30 07:52:10,870 INFO next_star_hunter db_save_success user_id=1 chat_id=1 request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab
 ```
 
 ### 타임아웃
 
-AI가 90초 안에 답하지 않아 `504`를 돌려준 요청입니다. 질문은 저장하지 않으므로 `db_save_success`가 없습니다.
+AI 서버에 연결하지 못하고 시간이 초과되어 `504 AI_TIMEOUT`을 돌려준 요청입니다. 질문은 저장하지 않으므로 `db_save_success`가 없습니다.
 
 ```
-{"error":"AI_TIMEOUT","message":"현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요."}
+2026-10-30 07:52:18,618 INFO next_star_hunter request_received method=POST path=/api/chat request_id=1a1d97e2-dc97-4176-9a65-20f40433e703
+2026-10-30 07:52:18,675 INFO next_star_hunter star_search_done request_id=1a1d97e2-dc97-4176-9a65-20f40433e703 hits=5 latency_ms=52
+2026-10-30 07:52:18,676 INFO next_star_hunter ai_call_start user_id=1 request_id=1a1d97e2-dc97-4176-9a65-20f40433e703
+2026-10-30 07:52:18,704 WARNING next_star_hunter ai_call_failure request_id=1a1d97e2-dc97-4176-9a65-20f40433e703 error=AI_TIMEOUT reason=ConnectTimeout
 ```
 
-```
-2026-10-30 16:44:02,107 INFO next_star_hunter request_received method=POST path=/api/chat request_id=5cee80bb-694c-4f41-a950-833ac94f345a
-2026-10-30 16:44:02,150 INFO next_star_hunter star_search_done request_id=5cee80bb-694c-4f41-a950-833ac94f345a hits=5 latency_ms=38
-2026-10-30 16:44:02,151 INFO next_star_hunter ai_call_start user_id=1 request_id=5cee80bb-694c-4f41-a950-833ac94f345a
-2026-10-30 16:45:32,163 WARNING next_star_hunter ai_call_failure request_id=5cee80bb-694c-4f41-a950-833ac94f345a error=AI_TIMEOUT reason=ReadTimeout
-```
-
-AI 서버가 오류로 응답하면 같은 자리에 `error=AI_ERROR reason=http_500`처럼 상태 코드가, 연결에 실패하면 `reason=ConnectError`처럼 예외 이름이 남습니다.
+AI가 연결은 됐지만 `LLM_TIMEOUT_SECONDS` 안에 답하지 않으면 `reason=ReadTimeout`이 남습니다. AI 서버가 오류로 응답하면 같은 자리에 `error=AI_ERROR reason=http_500`처럼 상태 코드가, 연결에 실패하면 `reason=ConnectError`처럼 예외 이름이 남습니다.
 
 ### 세션 교체
 
-브라우저 A에서 로그인한 계정으로 브라우저 B에서 다시 로그인한 뒤, 브라우저 A에서 질문을 보낸 경우입니다. 브라우저 A는 `401 SESSION_REPLACED`를 받고 `/auth?reason=session_replaced`로 이동합니다.
+같은 계정으로 다시 로그인한 뒤 이전 세션으로 화면(`GET /`)을 요청한 경우입니다. 화면 요청은 `/auth?reason=session_replaced`로 이동하고, API 요청은 `401 SESSION_REPLACED`를 받습니다.
 
 ```
-2026-10-30 16:52:10,204 INFO next_star_hunter request_received method=POST path=/api/auth/login request_id=bb1866e1-d746-42b6-9134-7516a0c6a769
-2026-10-30 16:52:10,251 INFO next_star_hunter login_success user_id=1 request_id=bb1866e1-d746-42b6-9134-7516a0c6a769
-2026-10-30 16:52:31,877 INFO next_star_hunter request_received method=POST path=/api/chat request_id=48cc7d5b-0b9e-4978-a8ef-1854f2f813f7
-2026-10-30 16:52:31,883 INFO next_star_hunter session_replaced user_id=1 request_id=48cc7d5b-0b9e-4978-a8ef-1854f2f813f7
-2026-10-30 16:52:31,941 INFO next_star_hunter request_received method=GET path=/auth request_id=618a9cc7-54b8-4189-9547-89567ab1ca67
+2026-10-30 07:52:16,180 INFO next_star_hunter request_received method=POST path=/api/auth/login request_id=0e76ba6f-a658-4881-8103-4ac6808cb229
+2026-10-30 07:52:16,231 INFO next_star_hunter login_success user_id=1 request_id=0e76ba6f-a658-4881-8103-4ac6808cb229
+2026-10-30 07:52:16,238 INFO next_star_hunter request_received method=GET path=/ request_id=91d48e60-3262-410a-971a-982f2f1a8491
+2026-10-30 07:52:16,240 INFO next_star_hunter session_replaced user_id=1 request_id=91d48e60-3262-410a-971a-982f2f1a8491
+2026-10-30 07:52:16,243 INFO next_star_hunter request_received method=GET path=/auth request_id=2641e2ef-d2f1-4c74-80ff-6c54a3747ef2
 ```
 
 ## 스타 자료(나무위키)

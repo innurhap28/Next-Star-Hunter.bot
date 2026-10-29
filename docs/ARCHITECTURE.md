@@ -67,6 +67,6 @@ backend/app/
 | 실패 | 처리 |
 | --- | --- |
 | 스타 검색 오류, 결과 없음 | 오류면 `star_search_failure`, 결과가 없으면 `star_search_done ... hits=0`을 남기고 참고 자료 없이 계속 |
-| AI 시간 초과, 오류 응답, 연결 실패 | `ai_call_failure`를 남기고 `504 AI_TIMEOUT` 또는 `502 AI_ERROR`. 질문은 저장하지 않음 |
+| AI 시간 초과, 오류 응답, 연결 실패 | `ai_call_failure`를 남기고 `504 AI_TIMEOUT` 또는 `502 AI_ERROR`(`LLM_API_KEY`가 없으면 `503 AI_NOT_CONFIGURED`). 질문은 저장하지 않음 |
 | 답변 저장 실패 | `db_save_failure`를 남기고 답변은 `saved: false`로 반환 |
 | 그 밖의 DB 오류 | `db_operation_failure`를 남기고 `503 DB_UNAVAILABLE` |
