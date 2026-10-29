@@ -282,115 +282,89 @@ psql "$DATABASE_URL" -v email='user@example.com' -f scripts/check_logs.sql
 
 `psql`은 `postgresql://` 주소를 받으므로 `DATABASE_URL`이 `postgresql+psycopg://`로 시작하면 `+psycopg`를 빼고 넣습니다. 운영 DB는 Railway PostgreSQL 플러그인의 Connect 정보로 접속합니다. 자세한 내용은 [데이터베이스 문서](docs/DATABASE.md#대화-로그-확인-방법)에 있습니다.
 
-## 실행 및 환경 변수
+## 10. 실행 방법
 
-Python 3.9 이상을 사용합니다.
+Python 3.9 이상과 PostgreSQL이 필요합니다. 저장소 루트에서 실행합니다.
 
-### macOS (zsh)
-
-저장소 루트에서 가상환경을 만들고 활성화한 뒤 의존성을 설치합니다.
+**macOS (zsh)**
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+cp .env.example .env            # SECRET_KEY, DATABASE_URL, LLM_API_KEY 입력
+PYTHONPATH=backend python -m app.init_db
 python -m uvicorn app.main:app --reload --app-dir backend
 ```
 
-### Windows PowerShell
-
-저장소 루트에서 가상환경을 만들고 활성화한 뒤 의존성을 설치합니다.
+**Windows PowerShell**
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env     # SECRET_KEY, DATABASE_URL, LLM_API_KEY 입력
+$env:PYTHONPATH = "backend"; python -m app.init_db
 python -m uvicorn app.main:app --reload --app-dir backend
 ```
 
-PowerShell에서 가상환경 활성화가 실행 정책에 의해 차단되면, 현재 PowerShell 창에만 적용되는 설정을 실행한 뒤 다시 활성화합니다.
+가상환경 활성화가 실행 정책에 막히면 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`를 먼저 실행합니다(현재 창에만 적용).
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
-```
+- 브라우저에서 `http://127.0.0.1:8000/`를 엽니다. 로그인하지 않았으면 `/auth`로 이동합니다.
+- `curl http://127.0.0.1:8000/health` → `{"status":"ok","service":"next-star-hunter"}` (DB·AI 설정 없이도 응답)
+- 설정과 DB 연결은 `python backend/check_local.py`로 점검할 수 있습니다(값은 출력하지 않음).
+- 스타 자료는 나무위키 덤프에서 추출·적재해야 들어갑니다. 절차는 [데이터 문서](docs/DATA.md)에 있고, 적재하지 않아도 채팅은 참고 자료 없이 동작합니다.
+- 테스트: `pip install -r requirements-dev.txt` 후 `ruff check .`, `pytest -q` (네트워크·AI 키·실제 DB 없이 실행)
 
-### 웹 화면 열기
+### 환경 변수
 
-서버를 실행한 뒤 브라우저에서 `http://127.0.0.1:8000/`를 엽니다. 로그인하지 않았다면 `/auth`(로그인·회원가입 화면)로 이동하고, 로그인하면 `/`에서 채팅 화면을 볼 수 있습니다. 로그인한 상태에서 `/auth`를 열면 `/`로 이동합니다. 화면 파일은 `frontend/templates`, CSS와 JS는 `frontend/static`에 있고 `/static` 경로로 제공됩니다. 회원가입과 로그인은 `.env`의 `SECRET_KEY`, `DATABASE_URL` 설정이 있어야 동작합니다. 채팅 화면은 페이지를 열 때 `GET /api/me/chats`로 최근 대화를 불러오고, 질문은 `POST /api/chat`으로 보냅니다(두 API가 develop에 들어가야 실제로 동작합니다).
+`.env.example`을 `.env`로 복사해 씁니다. `.env`는 `.gitignore`에 들어 있어 커밋되지 않습니다. 실제 키와 비밀번호는 README나 저장소에 넣지 않습니다.
 
-### Health 확인
+| 변수 | 필수 | 용도 |
+| --- | --- | --- |
+| `SECRET_KEY` | 필수 | 세션 쿠키 서명 키. 32자 이상이어야 인증 기능이 켜집니다. |
+| `DATABASE_URL` | 필수 | PostgreSQL 연결 주소 |
+| `LLM_API_KEY` | 필수(채팅) | AI API 키. 서버에서만 쓰고 브라우저로 보내지 않습니다. |
+| `LLM_BASE_URL` | 선택 | AI API 주소. 기본값 copa(`https://copa.codyssey.kr/v1`) |
+| `LLM_API_STYLE` | 선택 | 요청 형식 `anthropic`(기본) 또는 `openai` |
+| `LLM_MODEL` | 선택 | 기본값 `claude-sonnet-4`(예비로 `claude-haiku-4`만 허용) |
+| `LLM_TIMEOUT_SECONDS` | 선택 | AI 호출 시간 제한(초, 기본 90) |
+| `LLM_MAX_COMPLETION_TOKENS` | 선택 | 응답 최대 토큰 수 |
+| `SESSION_HTTPS_ONLY` | 선택 | HTTPS 전용 세션 쿠키. 운영은 `true` |
+| `ENABLE_API_DOCS` | 선택 | Swagger(`/docs`) 노출 여부. 운영은 `false` |
+| `LOG_FILE_PATH`, `LLM_JSON_MODE`, `CHAT_TOTAL_TIMEOUT_SECONDS`, `KNOWLEDGE_USAGE_SCOPE` | 선택 | 설정 항목만 있고 아직 코드에서 사용하지 않습니다. |
 
-서버 실행 상태를 유지한 채 새 터미널에서 요청합니다.
+### 배포
 
-macOS:
+Railway에서 `main` 브랜치를 자동 배포하고 PostgreSQL 플러그인을 씁니다. 서비스 설정, 운영 환경 변수, 배포 확인과 롤백 절차는 [배포 런북](docs/DEPLOY.md)에 있습니다.
 
-```bash
-curl http://127.0.0.1:8000/health
-```
+## 11. 협업 방식
 
-PowerShell:
+- `main`(배포)과 `develop`(통합) 브랜치를 두고, 기능은 `backend/<주제>`, `frontend/<주제>`, `data/<주제>`, `chore/<주제>` 브랜치에서, 문서는 `docs/setup-all`에서 작업합니다.
+- 모든 변경은 PR로 `develop`에 병합하고, 배포 전에는 `develop` → `main` 릴리스 PR을 만듭니다. 이미 올린 커밋은 rebase·force push로 고치지 않습니다.
+- 병합 조건: 상대 팀원 승인 1개(자기 승인 불가), CI `lint`(`ruff check .`)·`test`(`pytest -q`) 통과, 리뷰 대화 해결, 머지 커밋만 허용
+- 이슈는 이슈 폼으로 만들고, 우선순위(`priority: P0~P3`)와 분야(`area: *`) 라벨이 자동으로 붙습니다. PR에도 변경 경로에 따라 `area:` 라벨이 붙습니다.
+- 커밋 메시지는 `feat: 대화 화면 입력 폼 추가`처럼 `<type>: <내용>` 형식으로 씁니다.
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/health
-```
+자세한 규칙은 [협업 규칙](docs/CONVENTIONS.md)에 있습니다.
 
-정상 응답은 다음과 같습니다.
+## 12. 팀 역할과 개인별 작업 요약
 
-```json
-{"status":"ok","service":"next-star-hunter"}
-```
+| 구성원 | 담당 | 주요 작업 (PR) |
+| --- | --- | --- |
+| 김시현 (팀장, `innurhap28`) | 기획, 프론트엔드, 문서·CI, 데이터 추출 | 서비스 기획과 초기 FastAPI 앱·`/health` 구성, 로그인·회원가입·채팅 화면(#5), 페이지 라우트와 `/static` 연결(#28), 채팅 화면의 API 연결과 오류 안내(#32), 다른 곳 로그인 시 안내 화면, 나무위키 덤프 추출 CLI(#31), CI·ruff·pytest 설정과 PR 템플릿(#12), 린트 정리(#36), Railway 배포 런북(#14), README·API·DB·협업 문서 정리(#1, #17) |
+| 황승재 (`bidulgiya999`) | 백엔드, DB, 배포 | PostgreSQL 연결과 회원가입·로그인 API(#4), 로컬 PostgreSQL 준비와 Swagger 오류 명세(#8, #23), 비밀번호 해시 호환(#18), AI 설정과 채팅 API(#19, #29), 대화 기록 조회와 로그 확인 SQL(#30), 스타 자료 정제·적재(#33)와 채팅 스타 검색(#35), crud 계층 분리, 계정당 세션 하나 규칙(`user_sessions`), 이슈 폼과 라벨 자동화(#12), Railway 프로젝트와 배포 담당 |
+| 공동 | 통합·점검 | API 계약과 데이터 형식 협의, 서로의 PR 리뷰·승인, 프론트엔드·백엔드 통합 확인, 배포 전 점검 |
 
-현재 `/health`는 DB와 AI API 설정 없이 확인할 수 있습니다. 회원 인증, DB 연결, AI 호출 기능을 실행할 때는 `.env.example`을 `.env`로 복사해 환경에 맞게 설정하세요. DB 초기화 절차는 백엔드 기능 구현에 맞춰 구체화합니다. `.env`는 Git에 추가하지 않습니다.
+커밋과 PR 기준의 자세한 내용은 [팀 기여 문서](docs/CONTRIBUTORS.md)에 있습니다.
 
-환경 변수 키 목록:
+## 13. 데이터 출처와 라이선스
 
-| 변수 | 용도 |
-| --- | --- |
-| `SECRET_KEY` | 세션 및 서명용 비밀 키 |
-| `DATABASE_URL` | PostgreSQL 데이터베이스 연결 주소 |
-| `LOG_FILE_PATH` | 선택 사항인 로그 파일 경로 |
-| `LLM_API_KEY` | AI API 인증 키 |
-| `LLM_BASE_URL` | AI API 주소. 기본값 copa(`https://copa.codyssey.kr/v1`) |
-| `LLM_API_STYLE` | AI API 요청 형식 선택 |
-| `LLM_MODEL` | 모델. 기본값 `claude-sonnet-4`(예비로 `claude-haiku-4`만 허용) |
-| `LLM_TIMEOUT_SECONDS` | AI API 호출 시간 제한(초) |
-| `LLM_MAX_COMPLETION_TOKENS` | 응답 최대 토큰 수 |
-| `LLM_JSON_MODE` | JSON 응답 모드 사용 여부 |
-| `CHAT_TOTAL_TIMEOUT_SECONDS` | 전체 채팅 요청 시간 제한(초) |
-| `KNOWLEDGE_USAGE_SCOPE` | 자료 사용 범위 설정 |
-| `SESSION_HTTPS_ONLY` | HTTPS 전용 세션 쿠키 설정 |
-| `ENABLE_API_DOCS` | API 문서 노출 여부 |
+- 스타 자료는 나무위키(https://namu.wiki) 문서를 덤프에서 추출·정제·발췌한 것입니다. 원저작자는 나무위키 기여자입니다.
+- 나무위키 문서는 **CC BY-NC-SA 2.0 KR**입니다. 이 프로젝트는 수업 과제로 비영리로만 사용하며, 가공한 자료도 같은 라이선스를 따릅니다.
+- 답변에 자료를 쓰면 끝에 `출처: 나무위키(CC BY-NC-SA 2.0 KR) - 문서 이름` 줄을 붙이고, DB에는 문서별 원문 주소(`source_url`)를 저장합니다.
+- 원본 덤프와 추출 결과는 저장소에 올리지 않습니다. 자세한 내용은 [데이터 문서](docs/DATA.md)에 있습니다.
 
-실제 키와 비밀번호를 README나 저장소에 넣지 마세요. 배포 절차와 운영 환경 변수는 [배포 런북](docs/DEPLOY.md)을 참고하세요. 현재 평가 시 외부 네트워크에서 접속 가능한 서비스 URL을 제공해야 합니다.
+## 문서
 
-## 개발 단계
-
-1. 출처와 이용 조건을 확인할 수 있는 스타 자료를 선정하고 프로필·태그를 정리합니다.
-2. FastAPI 기반 회원가입·로그인, 입력 검증, 질문 처리와 AI API 연동을 구현합니다.
-3. PostgreSQL에 사용자 및 대화 기록을 저장하고 로그인 사용자별 조회를 제공합니다.
-4. Jinja2 기반 챗봇 화면과 랜덤 추천 흐름을 구현합니다.
-5. 오류 처리·운영 로그와 배포를 마치고 외부 접속 URL 및 실행 방법을 문서화합니다.
-
-## 협업 및 산출물
-
-`main`과 `develop` 브랜치를 사용하고, 기능 단위 브랜치에서 작업해 PR로 `develop`에 병합합니다. 배포 전에는 `develop`을 `main`으로 병합하는 릴리스 PR을 만듭니다. 브랜치·커밋·머지 규칙은 [협업 규칙](docs/CONVENTIONS.md)에 정리했습니다. 팀원별 유의미한 커밋 10회 이상과 PR 이력을 저장소에 남깁니다.
-
-### 팀 구성 및 역할
-
-| 담당 | 주요 역할 |
-| --- | --- |
-| 김시현 | 서비스 기획과 작업 조율, `frontend/` 화면 구현, 초기 FastAPI 앱 구성 및 프론트엔드 연동 기반 마련, `docs` 브랜치에서 프로젝트 문서 관리 |
-| 황승재 | `backend/`의 백엔드 기능 구현(인증, DB, AI 연동, 대화 기록 및 예외 처리), 배포 환경 구성과 서비스 배포 |
-| 공동 작업 | API 계약과 데이터 형식 협의, 프론트엔드·백엔드 통합, 기능 흐름 확인 및 배포 전 점검 |
-
-각 담당자는 맡은 영역의 구현 내용과 진행 상황을 공유하고, 통합 단계에서는 함께 동작을 확인합니다. 개인별 실제 기여 내역은 작업과 Git 이력에 맞춰 [팀 기여 문서](docs/CONTRIBUTORS.md)에 구체적으로 기록합니다.
-
-- 팀 구성원 및 개인별 작업 요약: [팀 기여 문서](docs/CONTRIBUTORS.md)
-- 시스템 구조: [아키텍처 문서](docs/ARCHITECTURE.md)
-- API 요청·응답 명세: [API 문서](docs/API.md)
-- DB 테이블 및 필드: [데이터베이스 문서](docs/DATABASE.md)
-- 스타 자료 출처·라이선스·추출·DB 적재 방법: [데이터 문서](docs/DATA.md)
-- 배포 절차와 운영 환경 변수: [배포 런북](docs/DEPLOY.md)
-
-저장소 링크, 배포 URL, 실제 실행 명령, 로그 확인 방법은 구현 및 배포 후 검증 가능한 값으로 채웁니다.
+- [아키텍처](docs/ARCHITECTURE.md) · [API 명세](docs/API.md) · [데이터베이스](docs/DATABASE.md) · [스타 자료](docs/DATA.md) · [배포 런북](docs/DEPLOY.md) · [협업 규칙](docs/CONVENTIONS.md) · [팀 기여](docs/CONTRIBUTORS.md)
