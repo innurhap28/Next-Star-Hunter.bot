@@ -28,6 +28,7 @@ SNIPPET_CHARS = 300
 CANDIDATE_LIMIT = 300  # stars whose chunks are scanned for keywords
 MEMBER_LIMIT = 20
 STATEMENT_TIMEOUT_MS = 250  # PostgreSQL only; a slow query becomes an empty result
+FALLBACK_TIMEOUT_MS = 150
 PROFILE_SECTION = "프로필"
 
 # region word -> birthplace prefixes as written in the data ('부산광역시 해운대구', '경상남도 …')
@@ -196,6 +197,16 @@ def merge_previous(current: Query, previous: Query) -> Query:
     return current
 
 
+def _use_chunk_index(conn, on=True):
+    """Make PostgreSQL read star_chunks through the (profile_id, chunk_index) index.
+
+    Row estimates for the profile-chunk join and for long id lists are low, so the
+    planner picks a full scan of star_chunks (230MB) that takes 250ms+ on the full data.
+    """
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("SET LOCAL enable_seqscan = " + ("off" if on else "on")))
+
+
 def _alias_match(name):
     wrapped = literal("\n") + StarProfile.aliases + literal("\n")
     return wrapped.like("%\n" + name.replace("%", "").replace("_", "") + "\n%")
@@ -253,6 +264,7 @@ def _candidates(conn, q: Query, extra=None, exclude=()) -> list[dict]:
         conds.append(extra)
     if exclude:
         conds.append(StarProfile.id.notin_(list(exclude)))
+    _use_chunk_index(conn, bool(set(q.kinds) & {"actor", "singer"}))
     stmt = select(StarProfile.__table__).select_from(joined).where(and_(*conds))
     if q.height_order == "desc":
         stmt = stmt.order_by(StarProfile.height_cm.desc(), StarProfile.id)
@@ -270,10 +282,7 @@ def _keyword_hits(conn, profile_ids: list[int], keywords: list[str]) -> dict[int
     """profile_id -> [(section, content, keyword)] for chunks containing a keyword."""
     if not profile_ids or not keywords:
         return {}
-    if conn.dialect.name == "postgresql":
-        # The planner guesses a full scan for a long id list; the chunks of a few hundred
-        # stars are only a few MB through the (profile_id, chunk_index) index.
-        conn.execute(text("SET LOCAL enable_seqscan = off"))
+    _use_chunk_index(conn)
     rows = conn.execute(
         select(StarChunk.profile_id, StarChunk.section, StarChunk.content)
         .where(StarChunk.profile_id.in_(profile_ids),
@@ -291,6 +300,10 @@ def _bounded_keyword_search(conn, keywords: list[str]) -> dict[int, list]:
     """No structured conditions: a LIMITed scan over all chunks for the keywords."""
     if not keywords:
         return {}
+    _use_chunk_index(conn, False)
+    if conn.dialect.name == "postgresql":
+        # a full scan; keep it short so the whole search stays well under 300ms
+        conn.execute(text(f"SET LOCAL statement_timeout = {FALLBACK_TIMEOUT_MS}"))
     try:
         rows = conn.execute(
             select(StarChunk.profile_id, StarChunk.section, StarChunk.content)
@@ -321,6 +334,7 @@ def _default_snippets(conn, profile_ids: list[int]) -> dict[int, list]:
     """The profile chunk and the first text chunk of each star."""
     if not profile_ids:
         return {}
+    _use_chunk_index(conn)
     rows = conn.execute(
         select(StarChunk.profile_id, StarChunk.section, StarChunk.content)
         .where(StarChunk.profile_id.in_(profile_ids), StarChunk.chunk_index < MAX_SNIPPETS)
