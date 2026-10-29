@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f5f2">
     <title>{{ page_title | default("스타 헌팅 · Next Star Hunter") }}</title>
-    <link rel="stylesheet" href="../static/css/app.css">
-    <script src="../static/js/chat.js" defer></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <script src="/static/js/chat.js" defer></script>
   </head>
   <body class="chat-page">
     <div class="chat-layout">
-      <aside class="sidebar" aria-label="대화 메뉴">
+      <aside class="sidebar" id="chat-sidebar" aria-label="대화 메뉴">
         <a class="brand" href="/" aria-label="Next Star Hunter 홈">
           <span class="brand-mark" aria-hidden="true">✦</span>
           <span>Next Star Hunter</span>
@@ -19,9 +19,8 @@
           <span aria-hidden="true">＋</span> 새 대화
         </button>
         <div class="history-heading">최근 대화</div>
-        <nav class="chat-history" aria-label="최근 대화 목록">
-          <a class="history-item is-current" href="#" aria-current="page">나의 취향에 맞는 스타</a>
-          <p class="history-empty">저장된 대화가 여기에 표시됩니다.</p>
+        <nav class="chat-history" aria-label="최근 대화 목록" data-chat-history>
+          <p class="history-empty" data-history-empty>저장된 대화가 여기에 표시됩니다.</p>
         </nav>
         <div class="sidebar-footer">
           <a class="user-profile" href="/auth">
@@ -34,7 +33,7 @@
 
       <main class="chat-main">
         <header class="chat-topbar">
-          <button class="icon-button mobile-menu-button" type="button" aria-label="대화 메뉴 열기" data-menu-toggle>☰</button>
+          <button class="icon-button mobile-menu-button" type="button" aria-label="대화 메뉴 열기" aria-controls="chat-sidebar" aria-expanded="false" data-menu-toggle>☰</button>
           <span class="topbar-title">스타 헌팅</span>
           <a class="topbar-link" href="/auth" data-login-link>로그인</a>
           <button class="topbar-link" type="button" data-logout-button hidden>로그아웃</button>
@@ -57,12 +56,13 @@
 
         <form class="composer" data-chat-form>
           <label class="visually-hidden" for="chat-input">스타에게 바라는 조건을 입력하세요</label>
-          <textarea id="chat-input" name="message" rows="1" placeholder="찾고 싶은 스타의 조건을 입력해 주세요" data-chat-input></textarea>
+          <textarea id="chat-input" name="message" rows="1" placeholder="찾고 싶은 스타의 조건을 입력해 주세요 (Shift+Enter 줄바꿈)" aria-describedby="chat-status" data-chat-input></textarea>
           <div class="composer-actions">
             <span class="composer-hint">AI가 추천한 정보는 참고용으로 확인해 주세요.</span>
             <button class="button button-primary send-button" type="submit" aria-label="메시지 보내기" data-send-button>↑</button>
           </div>
         </form>
+        <p class="chat-status" id="chat-status" role="status" data-chat-status></p>
         <p class="chat-disclaimer">Next Star Hunter는 취향에 맞는 스타를 찾도록 도와주는 서비스입니다.</p>
       </main>
     </div>

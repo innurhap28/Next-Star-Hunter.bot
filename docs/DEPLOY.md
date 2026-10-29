@@ -35,10 +35,10 @@ Variables 탭에서 **이름만** 만들고 값은 팀이 직접 입력합니다
 | --- | --- |
 | `SECRET_KEY` | 팀이 직접 생성: `python -c "import secrets; print(secrets.token_hex(32))"`. **32자 이상**이어야 인증이 켜진다(`backend/app/config.py`의 `auth_configured()`) |
 | `DATABASE_URL` | Postgres 서비스의 참조 변수 `${{Postgres.DATABASE_URL}}` 로 넣는다(값 복사 불필요) |
-| `LLM_API_KEY` | 팀이 사용하는 AI API 콘솔에서 발급 |
-| `LLM_BASE_URL` | AI API 호환 엔드포인트(로컬 기본값은 `.env.example` 참고) |
+| `LLM_API_KEY` | copa 키. AI 관련해서 꼭 넣어야 하는 값은 이것뿐입니다 |
+| `LLM_BASE_URL` | 기본값(copa)을 쓰면 넣지 않아도 됩니다 |
 | `LLM_API_STYLE` | 요청 형식(`anthropic` 또는 `openai`) |
-| `LLM_MODEL` | 사용할 모델 ID |
+| `LLM_MODEL` | 기본값 `claude-sonnet-4`. 바꿀 때는 `claude-haiku-4`만 가능 |
 | `LLM_TIMEOUT_SECONDS` | AI API 호출 제한 시간(초) |
 | `LLM_MAX_COMPLETION_TOKENS` | 응답 최대 토큰 수 |
 | `LLM_JSON_MODE` | JSON 응답 모드 사용 여부(`openai` 방식에서만 적용) |

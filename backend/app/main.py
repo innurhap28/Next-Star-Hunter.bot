@@ -1,4 +1,4 @@
-"""FastAPI entry point with account APIs and a DB-independent health route."""
+"""FastAPI entry point with account/chat APIs and a DB-independent health route."""
 import logging
 import secrets
 from contextlib import asynccontextmanager
@@ -8,12 +8,13 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings
-from .routers import auth
+from .routers import auth, chat, pages
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("next_star_hunter")
@@ -43,7 +44,7 @@ def is_same_origin(origin, request):
         return False
 
 
-def create_app(settings=None, session_factory=None):
+def create_app(settings=None, session_factory=None, ai_transport=None):
     settings = settings or Settings()
     @asynccontextmanager
     async def lifespan(app):
@@ -57,6 +58,8 @@ def create_app(settings=None, session_factory=None):
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.engine = None
+    # Tests inject an httpx.MockTransport; None uses the real network.
+    app.state.ai_transport = ai_transport
     # Without a configured stable key, account APIs return 503; health still works.
     secret_key = settings.SECRET_KEY.get_secret_value() or secrets.token_hex(32)
     app.add_middleware(SessionMiddleware, secret_key=secret_key,
@@ -110,7 +113,10 @@ def create_app(settings=None, session_factory=None):
     async def health_check():
         return {"status": "ok", "service": "next-star-hunter"}
 
+    app.mount("/static", StaticFiles(directory=str(pages.STATIC_DIR)), name="static")
     app.include_router(auth.router)
+    app.include_router(chat.router)
+    app.include_router(pages.router)
     return app
 
 app = create_app()

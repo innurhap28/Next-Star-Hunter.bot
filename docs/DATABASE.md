@@ -6,9 +6,9 @@ PostgreSQL을 사용합니다. 아래 스키마를 기준으로 구현하고, �
 
 - [x] PostgreSQL 연결 설정 및 스키마 생성
 - [x] 사용자 계정과 비밀번호 해시 저장
-- [ ] 사용자별 질문·응답·생성 시각 누적 저장
-- [ ] 로그인 사용자 기준으로 본인 대화만 조회
-- [ ] DB 확인용 SQL, 스크립트 또는 로그 조회 API/화면 제공
+- [x] 사용자별 질문·응답·생성 시각 누적 저장
+- [x] 로그인 사용자 기준으로 본인 대화만 조회
+- [x] DB 확인용 SQL, 스크립트 또는 로그 조회 API/화면 제공
 
 ## 관계
 
@@ -79,7 +79,7 @@ erDiagram
 | `answer` | 텍스트 | AI가 생성한 응답 |
 | `created_at` | 시간대 포함 시각 | 대화 생성 시각 |
 
-사용자별 로그 조회는 `user_id`로 제한합니다. 최신 기록을 효율적으로 가져올 수 있도록 해당 필드와 생성 시각에 대한 인덱스를 검토합니다. DB 확인용 SQL, 스크립트 또는 로그 조회 API/화면 중 제공하는 방법을 정해 체크리스트를 갱신합니다.
+사용자별 로그 조회는 `user_id`로 제한합니다. 최신 기록을 빠르게 가져오도록 `(user_id, created_at, id)` 인덱스 `ix_chat_logs_user_created`를 둡니다.
 
 ### `star_profiles`
 
@@ -122,3 +122,14 @@ erDiagram
   - 확장을 만들 권한이 없으면 대신 `to_tsvector('simple', ...)` 전문 검색 인덱스를 만듭니다.
 
 두 테이블에는 출처와 라이선스(CC BY-NC-SA 2.0 KR, 비영리)를 적은 테이블 주석이 붙어 있습니다. 자세한 이용 조건은 `docs/DATA.md` 를 봅니다.
+
+## 대화 로그 확인 방법
+
+- API: 로그인한 뒤 `GET /api/me/chats?limit=N`으로 본인 기록을 봅니다. 자세한 형식은 [API 명세](API.md)에 있습니다.
+- SQL: `scripts/check_logs.sql`에 사용자별 대화 수와 한 사용자의 최근 20건을 보는 쿼리가 있습니다.
+
+```bash
+psql "$DATABASE_URL" -v email='user@example.com' -f scripts/check_logs.sql
+```
+
+`psql`은 `postgresql://` 형식 주소를 받으므로, `DATABASE_URL`이 `postgresql+psycopg://`로 시작하면 `+psycopg`를 빼고 넣습니다.
