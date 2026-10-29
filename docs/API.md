@@ -69,6 +69,7 @@
 - [x] 최근 대화를 이용해 같은 사용자의 문맥 유지
 - [x] `GET /api/me/chats`: 로그인한 사용자의 대화 기록 조회
 - [x] AI 실패·시간 초과 시 오류 안내와 서버 로그 기록
+- [x] 나무위키 스타 자료 검색 결과를 답변 근거로 넣고 출처 표시
 
 ### `POST /api/chat`
 
@@ -88,7 +89,7 @@
 {
   "id": 1,
   "question": "안경을 쓴 부산 출신 아이돌을 추천해줘",
-  "answer": "조건에 맞는 스타를 찾아볼게요.",
+  "answer": "부산 출신 아이돌이라면 ○○를 추천해요. ...\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - ○○, △△",
   "created_at": "2026-10-29T12:00:00Z",
   "saved": true
 }
@@ -103,7 +104,30 @@ AI API 호출은 서버에서만 하고, 키는 응답이나 로그에 넣지 �
 | `anthropic` | `{LLM_BASE_URL}/messages` | `x-api-key`, `anthropic-version` |
 | `openai` | `{LLM_BASE_URL}/chat/completions` | `Authorization: Bearer` |
 
-문맥은 같은 사용자의 최근 질문·답변 5쌍을 오래된 순서로 넣고, 그 뒤에 새 질문을 붙입니다. 시스템 프롬프트는 취향을 바탕으로 한국 스타를 추천하는 캐스팅 매니저 역할이며 한국어로 답하도록 합니다.
+문맥은 같은 사용자의 최근 질문·답변 5쌍을 오래된 순서로 넣고, 그 뒤에 새 질문을 붙입니다.
+
+시스템 프롬프트는 친절한 캐스팅 매니저 역할입니다. 한국어 평문으로만 답하고(제목·굵은 글씨·목록 기호 없이, 이모지는 거의 쓰지 않음), 6문장 이내로 1~3명을 추천하며 이유를 말하도록 합니다. 참고 자료에 없는 사실은 지어내지 않고, 자료로 확인되지 않는 조건은 확인하지 못했다고 말하게 하며, 앞선 대화의 조건도 계속 고려하게 합니다.
+
+#### 스타 자료 검색
+
+AI 를 부르기 전에 질문으로 `star_profiles`, `star_chunks` 를 검색합니다(`backend/app/star_search.py`). 규칙 기반이고 AI 를 쓰지 않습니다.
+
+| 질문 속 표현 | 조건 |
+| --- | --- |
+| `부산`, `서울`, `경기도`, `경상도`, `수원` 같은 시·도와 주요 도시 | 출생지가 그 지역으로 시작 |
+| `남자`·`남성`·`보이그룹`, `여자`·`여성`·`걸그룹` | 성별 (`M`/`F`) |
+| `아이돌`·`멤버`·`걸그룹`·`보이그룹` | 소속 그룹이 있는 인물 |
+| `배우`, `가수` | 프로필 조각(인포박스)의 직업 등에 그 단어가 있음 |
+| `2020년 데뷔`, `00년생`, `90년대생` | 데뷔연도, 출생연도 |
+| `키 큰`, `키 작은` | 키가 있는 스타만, 키 순서로 정렬 |
+| 그룹·스타 이름 (`트와이스`, `아이유`) | 제목이나 다른 이름과 정확히 같을 때. 그룹이면 멤버 목록, `비슷한` 이 있으면 성별·분야·데뷔 시기가 비슷한 스타 |
+| 나머지 단어 (`안경`, `보조개`) | 위 조건으로 추린 스타(최대 300명)의 조각에서만 찾음 |
+
+- 조건이 하나도 없고 이름도 아니면 단어만으로 전체 조각을 찾되 40건에서 멈춥니다. 오래 걸리면(250ms) 못 찾은 것으로 봅니다.
+- 조건이 없는 짧은 후속 질문(`그 중에 보조개 있는 사람`)은 바로 앞 질문의 조건을 이어받습니다.
+- 결과는 최대 5명이고, 스타마다 주요 프로필 항목과 300자 안팎의 발췌 2개, 원문 주소를 담아 시스템 프롬프트 끝에 `참고 자료` 블록으로 붙입니다. 찾지 못한 단어는 `자료에서 찾지 못한 조건` 으로 함께 알려 줍니다.
+- 결과가 있으면 서버가 답변 끝에 `출처: 나무위키(CC BY-NC-SA 2.0 KR) - 이름1, 이름2` 줄을 붙입니다. 이 줄까지 포함해 저장합니다. 결과가 없으면 붙이지 않고 시스템 프롬프트도 기본 그대로입니다.
+- 스타 테이블이 없거나 비어 있거나 DB 오류가 나도 채팅은 그대로 동작합니다(참고 자료 없이 답변). PostgreSQL 에서는 검색 쿼리마다 250ms 제한을 둡니다.
 
 | 상황 | 상태 코드 | `error` |
 | --- | --- | --- |
@@ -128,12 +152,13 @@ AI API 호출은 서버에서만 하고, 키는 응답이나 로그에 넣지 �
 
 ```text
 INFO next_star_hunter request_received method=POST path=/api/chat request_id=...
+INFO next_star_hunter star_search_done request_id=... hits=5 latency_ms=36
 INFO next_star_hunter ai_call_start user_id=12 request_id=...
 INFO next_star_hunter ai_call_success request_id=... latency_ms=1240
 INFO next_star_hunter db_save_success user_id=12 chat_id=987 request_id=...
 ```
 
-실패하면 `ai_call_failure request_id=... error=AI_TIMEOUT reason=ReadTimeout` 또는 `db_save_failure user_id=12 request_id=... error_type=OperationalError`가 남습니다.
+실패하면 `ai_call_failure request_id=... error=AI_TIMEOUT reason=ReadTimeout` 또는 `db_save_failure user_id=12 request_id=... error_type=OperationalError`가 남습니다. 스타 검색이 실패하면 `star_search_failure request_id=... error_type=ProgrammingError` 가 남고 채팅은 계속됩니다.
 
 ### `GET /api/me/chats`
 
@@ -149,7 +174,7 @@ INFO next_star_hunter db_save_success user_id=12 chat_id=987 request_id=...
     {
       "id": 7,
       "question": "안경을 쓴 부산 출신 아이돌을 추천해줘",
-      "answer": "조건에 맞는 스타를 찾아볼게요.",
+      "answer": "부산 출신 아이돌이라면 ○○를 추천해요. ...\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - ○○, △△",
       "created_at": "2026-10-29T12:00:00Z"
     },
     {
