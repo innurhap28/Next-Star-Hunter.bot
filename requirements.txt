@@ -1,4 +1,4 @@
-# Mission stack: Python 3.9+, FastAPI, server-rendered forms, SQLite/SQLAlchemy, and HTTP AI API calls.
+# Mission stack: Python 3.9+, FastAPI, PostgreSQL/SQLAlchemy, and HTTP AI API calls.
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 SQLAlchemy>=2.0,<3

@@ -71,14 +71,58 @@ API의 실제 경로와 요청·응답 예시는 구현 기준으로 [API 명세
 
 Python 3.9 이상을 사용합니다.
 
+### macOS (zsh)
+
+저장소 루트에서 가상환경을 만들고 활성화한 뒤 의존성을 설치합니다.
+
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --app-dir backend
 ```
 
-`.env`에 로컬 값을 설정한 다음 애플리케이션 실행 명령을 사용합니다. 앱 실행 명령과 DB 초기화 절차는 구현 완료 후 이 문서에 구체적으로 기록합니다. `.env`는 Git에 추가하지 않습니다.
+### Windows PowerShell
+
+저장소 루트에서 가상환경을 만들고 활성화한 뒤 의존성을 설치합니다.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --app-dir backend
+```
+
+PowerShell에서 가상환경 활성화가 실행 정책에 의해 차단되면, 현재 PowerShell 창에만 적용되는 설정을 실행한 뒤 다시 활성화합니다.
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+### Health 확인
+
+서버 실행 상태를 유지한 채 새 터미널에서 요청합니다.
+
+macOS:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+PowerShell:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+정상 응답은 다음과 같습니다.
+
+```json
+{"status":"ok","service":"next-star-hunter"}
+```
+
+현재 `/health`는 DB와 AI API 설정 없이 확인할 수 있습니다. 회원 인증, DB 연결, AI 호출 기능을 실행할 때는 `.env.example`을 `.env`로 복사해 환경에 맞게 설정하세요. DB 초기화 절차는 백엔드 기능 구현에 맞춰 구체화합니다. `.env`는 Git에 추가하지 않습니다.
 
 환경 변수 키 목록:
 
@@ -112,6 +156,16 @@ cp .env.example .env
 ## 협업 및 산출물
 
 `main`과 개발 브랜치 또는 이에 준하는 브랜치 전략을 사용하고, 기능 단위 브랜치에서 작업해 PR로 병합합니다. 팀원별 유의미한 커밋 10회 이상과 PR 이력을 저장소에 남깁니다.
+
+### 팀 구성 및 역할
+
+| 담당 | 주요 역할 |
+| --- | --- |
+| 김시현 | 서비스 기획과 작업 조율, `frontend/` 화면 구현, 초기 FastAPI 앱 구성 및 프론트엔드 연동 기반 마련, `docs` 브랜치에서 프로젝트 문서 관리 |
+| 황승재 | `backend/`의 백엔드 기능 구현(인증, DB, AI 연동, 대화 기록 및 예외 처리), 배포 환경 구성과 서비스 배포 |
+| 공동 작업 | API 계약과 데이터 형식 협의, 프론트엔드·백엔드 통합, 기능 흐름 확인 및 배포 전 점검 |
+
+각 담당자는 맡은 영역의 구현 내용과 진행 상황을 공유하고, 통합 단계에서는 함께 동작을 확인합니다. 개인별 실제 기여 내역은 작업과 Git 이력에 맞춰 [팀 기여 문서](docs/CONTRIBUTORS.md)에 구체적으로 기록합니다.
 
 - 팀 구성원 및 개인별 작업 요약: [팀 기여 문서](docs/CONTRIBUTORS.md)
 - 시스템 구조: [아키텍처 문서](docs/ARCHITECTURE.md)
