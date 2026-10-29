@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..dependencies import get_current_user, get_db
 from ..openapi_errors import CHAT_ERRORS
-from ..schemas import ChatRequest, ChatResponse
+from ..schemas.chat import ChatRequest, ChatResponse
 from ..services.chat import AIError, answer_question
 
 router = APIRouter(prefix="/api", tags=["chat"])

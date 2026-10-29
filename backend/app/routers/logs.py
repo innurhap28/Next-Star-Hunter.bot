@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from ..crud.chat_logs import list_user_chats
 from ..dependencies import get_current_user, get_db
 from ..openapi_errors import HISTORY_ERRORS
-from ..schemas import ChatHistoryResponse
+from ..schemas.logs import ChatHistoryResponse
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
