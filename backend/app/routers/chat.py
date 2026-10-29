@@ -1,27 +1,27 @@
-"""Chat API: recent context, AI call, and chat log saving."""
+"""Chat API: recent context, AI call, chat log saving, and history lookup."""
 import logging
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..ai_client import AIError, ask_ai
 from ..dependencies import get_current_user, get_db
 from ..models import ChatLog, utc_now
-from ..openapi_errors import CHAT_ERRORS
-from ..schemas import ChatRequest, ChatResponse
+from ..openapi_errors import CHAT_ERRORS, HISTORY_ERRORS
+from ..schemas import ChatHistoryResponse, ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/api", tags=["chat"])
 logger = logging.getLogger("next_star_hunter")
 CONTEXT_PAIRS = 5
 
 
-def recent_history(db, user_id):
+def recent_history(db, user_id, limit=CONTEXT_PAIRS):
     """The user's latest Q/A pairs, oldest first."""
     rows = db.scalars(
         select(ChatLog).where(ChatLog.user_id == user_id)
-        .order_by(ChatLog.created_at.desc(), ChatLog.id.desc()).limit(CONTEXT_PAIRS)
+        .order_by(ChatLog.created_at.desc(), ChatLog.id.desc()).limit(limit)
     ).all()
     return list(reversed(rows))
 
@@ -60,3 +60,10 @@ def chat(body: ChatRequest, request: Request, user=Depends(get_current_user),
                 user.id, log.id, request_id)
     return ChatResponse(id=log.id, question=log.question, answer=log.answer,
                         created_at=log.created_at, saved=True)
+
+
+@router.get("/me/chats", response_model=ChatHistoryResponse, responses=HISTORY_ERRORS)
+def my_chats(limit: int = Query(20, ge=1, le=100), user=Depends(get_current_user),
+             db=Depends(get_db)):
+    # Only the logged-in user's rows; the same query feeds the chat context.
+    return ChatHistoryResponse(items=recent_history(db, user.id, limit))
