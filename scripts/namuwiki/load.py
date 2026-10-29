@@ -46,23 +46,40 @@ SKIP_SUBDOC_RE = re.compile(
 SECTION_MAX = 200
 TABLES = [StarProfile.__table__, StarChunk.__table__]
 # (name, PostgreSQL statement). Built after the rows are in, dropped before reloading.
+# Small B-tree indexes for the structured filters of the chat search. profile_id lookups
+# use the (profile_id, chunk_index) unique index, so star_chunks needs nothing here.
+PROFILE_INDEXES = [
+    ("ix_star_profiles_kind_gender",
+     "CREATE INDEX ix_star_profiles_kind_gender ON star_profiles (kind, gender)"),
+    ("ix_star_profiles_debut_year",
+     "CREATE INDEX ix_star_profiles_debut_year ON star_profiles (debut_year)"),
+    ("ix_star_profiles_birth_year",
+     "CREATE INDEX ix_star_profiles_birth_year ON star_profiles (birth_year)"),
+]
 TRGM_INDEXES = [
     ("ix_star_profiles_title_trgm",
      "CREATE INDEX ix_star_profiles_title_trgm ON star_profiles USING gin (title gin_trgm_ops)"),
     ("ix_star_profiles_aliases_trgm",
      "CREATE INDEX ix_star_profiles_aliases_trgm ON star_profiles "
      "USING gin (aliases gin_trgm_ops)"),
-    ("ix_star_chunks_content_trgm",
-     "CREATE INDEX ix_star_chunks_content_trgm ON star_chunks USING gin (content gin_trgm_ops)"),
 ]
 FTS_INDEXES = [
     ("ix_star_profiles_names_fts",
      "CREATE INDEX ix_star_profiles_names_fts ON star_profiles "
      "USING gin (to_tsvector('simple', title || ' ' || aliases))"),
-    ("ix_star_chunks_content_fts",
-     "CREATE INDEX ix_star_chunks_content_fts ON star_chunks "
-     "USING gin (to_tsvector('simple', content))"),
 ]
+# The content index is larger than the table itself (299MB vs 234MB on the full dump), and
+# the chat search only scans the chunks of already filtered stars, so it is opt-in.
+CONTENT_TRGM_INDEX = (
+    "ix_star_chunks_content_trgm",
+    "CREATE INDEX ix_star_chunks_content_trgm ON star_chunks USING gin (content gin_trgm_ops)",
+)
+CONTENT_FTS_INDEX = (
+    "ix_star_chunks_content_fts",
+    "CREATE INDEX ix_star_chunks_content_fts ON star_chunks "
+    "USING gin (to_tsvector('simple', content))",
+)
+CONTENT_INDEX_CHOICES = ("none", "trgm")
 
 
 def source_url(title: str) -> str:
@@ -129,12 +146,17 @@ class Writer:
 
 
 def _drop_search_indexes(conn) -> None:
-    for name, _ in TRGM_INDEXES + FTS_INDEXES:
+    every = PROFILE_INDEXES + TRGM_INDEXES + FTS_INDEXES + [CONTENT_TRGM_INDEX,
+                                                             CONTENT_FTS_INDEX]
+    for name, _ in every:
         conn.execute(text(f"DROP INDEX IF EXISTS {name}"))
 
 
-def _create_search_indexes(conn) -> str:
-    """pg_trgm GIN indexes if the extension can be used, else 'simple' full-text indexes."""
+def _create_search_indexes(conn, content_index: str = "none") -> str:
+    """pg_trgm GIN indexes if the extension can be used, else 'simple' full-text indexes.
+
+    The chunk content index is built only with content_index='trgm'.
+    """
     try:
         with conn.begin_nested():
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
@@ -143,7 +165,10 @@ def _create_search_indexes(conn) -> str:
     has_trgm = conn.execute(
         text("SELECT count(*) FROM pg_extension WHERE extname = 'pg_trgm'")
     ).scalar()
-    for _, sql in TRGM_INDEXES if has_trgm else FTS_INDEXES:
+    indexes = PROFILE_INDEXES + (TRGM_INDEXES if has_trgm else FTS_INDEXES)
+    if content_index == "trgm":
+        indexes = indexes + [CONTENT_TRGM_INDEX if has_trgm else CONTENT_FTS_INDEX]
+    for _, sql in indexes:
         conn.execute(text(sql))
     return "pg_trgm" if has_trgm else "fts_simple"
 
@@ -163,8 +188,14 @@ def load(
     limit: int | None = None,
     batch: int = 1000,
     log: TextIO | None = None,
+    content_index: str = "none",
 ) -> dict:
-    """Replace star_profiles / star_chunks with the documents in input_dir."""
+    """Replace star_profiles / star_chunks with the documents in input_dir.
+
+    content_index: 'none' (default) or 'trgm' for a GIN index on star_chunks.content.
+    """
+    if content_index not in CONTENT_INDEX_CHOICES:
+        raise ValueError("content_index must be one of " + ", ".join(CONTENT_INDEX_CHOICES))
     t0 = time.time()
     src = Path(input_dir)
 
@@ -245,14 +276,15 @@ def load(
                     f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
                     f"COALESCE((SELECT max(id) FROM {table}), 0) + 1, false)"
                 ))
-            search_index = _create_search_indexes(conn)
-            note(f"search indexes: {search_index}")
+            search_index = _create_search_indexes(conn, content_index)
+            note(f"search indexes: {search_index} (content: {content_index})")
 
     return {
         **stats,
         "profiles": w.counts["profiles"],
         "chunks": w.counts["chunks"],
         "search_index": search_index,
+        "content_index": content_index,
         "license": LICENSE,
         "license_url": LICENSE_URL,
         "elapsed_sec": round(time.time() - t0, 1),
@@ -269,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="PostgreSQL URL (default: $DATABASE_URL)")
     ap.add_argument("--limit", type=int, default=None, help="load only the first N stars")
     ap.add_argument("--batch", type=int, default=1000, help="rows per INSERT batch")
+    ap.add_argument("--content-index", choices=CONTENT_INDEX_CHOICES, default="none",
+                    help="GIN index on chunk text: none (default) or trgm (about 300MB more)")
     ap.add_argument("--quiet", action="store_true", help="no progress log on stderr")
     args = ap.parse_args(argv)
 
@@ -282,7 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         stats = load(engine, args.input, limit=args.limit, batch=max(1, args.batch),
-                     log=None if args.quiet else sys.stderr)
+                     log=None if args.quiet else sys.stderr,
+                     content_index=args.content_index)
     except Exception as error:
         # never print the URL or the driver message (it may contain the password)
         print("load failed (" + type(error).__name__ + "); nothing was changed.",
