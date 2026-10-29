@@ -1,21 +1,26 @@
 name: 이슈 라벨 자동화
 
-# 규칙 5: 어떤 경우에도 실패하지 않는다.
+# 오류 처리 규칙:
+# - 입력이 이상해도(오타·빈 본문·폼 헤딩 없음) 워크플로는 실패하지 않고 쓰기를 하지 않는다.
 # - 목표 라벨은 허용목록(AREAS/PRIORITIES) 통과 값으로만 만든다 → 잘못된 값은 라벨이 되지 않는다.
 # - 제거 대상은 "이슈에 실제로 붙어 있는" area:/priority: 라벨에서만 고른다 → 없는 라벨 제거 시도 없음.
-# - 각 API 호출은 try/catch로 감싼다 → 경합(404)·라벨 미존재(422) 같은 오류가 job 실패로 번지지 않는다.
+# - API 오류는 404(이미 반영)·422(입력 문제)만 무시하고, 권한(403)·서버(5xx)는 warning + 실패로 드러낸다.
+#   조용히 삼키면 "라벨이 안 붙었는데 아무도 모르는" 상태가 되고, 통합 검증이 거짓 통과한다.
 
 on:
   issues:
     types: [opened, edited]
 
 permissions:
-  contents: read
   issues: write
 
 jobs:
   label:
     runs-on: ubuntu-latest
+    # 본문을 연달아 고치면 run이 병렬로 돌아 라벨이 서로를 덮어쓴다 → 이슈 단위로 직렬화.
+    concurrency:
+      group: issue-labels-${{ github.event.issue.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/github-script@v9
         with:
@@ -24,7 +29,19 @@ jobs:
             const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
 
             const issue = context.payload.issue || {};
+            if (issue.pull_request) {
+              core.info('PR 이벤트 - 이 워크플로는 이슈만 담당한다');
+              return;
+            }
+
             const lines = (issue.body || '').split(/\r?\n/);
+            // 폼을 거치지 않은 이슈(자유 형식ㆍ빈 본문)에서는 사람이 붙인 라벨을 건드리지 않는다.
+            const hasForm = lines.some((line) => ['### 분야', '### 우선순위'].includes(line.trim()));
+            if (!hasForm) {
+              core.info('폼 헤딩 없음 - 변경 없음');
+              return;
+            }
+
             function valueAfter(heading) {
               const start = lines.findIndex((line) => line.trim() === `### ${heading}`);
               if (start === -1) return '';
@@ -52,7 +69,13 @@ jobs:
               try {
                 await action();
               } catch (error) {
-                core.info(`라벨 갱신 건너뜀: ${error.message}`);
+                const status = error && error.status;
+                if (status === 404 || status === 422) {
+                  core.info(`이미 반영됨(${status}) - 계속`);
+                  return;
+                }
+                core.warning(`라벨 갱신 실패(${status || '?'}): ${error.message}`);
+                core.setFailed(`라벨 갱신 실패: ${error.message}`);
               }
             }
 
