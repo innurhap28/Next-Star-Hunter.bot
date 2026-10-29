@@ -3,12 +3,12 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..ai_client import AIError, ask_ai
+from ..crud.chat_logs import list_user_chats, recent_chat_pairs, save_chat_log
 from ..dependencies import get_current_user, get_db
-from ..models import ChatLog, utc_now
+from ..models import utc_now
 from ..openapi_errors import CHAT_ERRORS, HISTORY_ERRORS
 from ..schemas import ChatHistoryResponse, ChatRequest, ChatResponse
 from ..star_search import StarSearchResult, format_reference, search_stars, source_line
@@ -18,21 +18,12 @@ logger = logging.getLogger("next_star_hunter")
 CONTEXT_PAIRS = 5
 
 
-def recent_history(db, user_id, limit=CONTEXT_PAIRS):
-    """The user's latest Q/A pairs, oldest first."""
-    rows = db.scalars(
-        select(ChatLog).where(ChatLog.user_id == user_id)
-        .order_by(ChatLog.created_at.desc(), ChatLog.id.desc()).limit(limit)
-    ).all()
-    return list(reversed(rows))
-
-
 @router.post("/chat", response_model=ChatResponse, responses=CHAT_ERRORS)
 def chat(body: ChatRequest, request: Request, user=Depends(get_current_user),
          db=Depends(get_db)):
     settings = request.app.state.settings
     request_id = request.state.request_id
-    history = recent_history(db, user.id)
+    history = recent_chat_pairs(db, user.id, CONTEXT_PAIRS)
     previous = history[-1].question if history else None
     # Star data lookup never raises; with no data the AI answers without references.
     found = StarSearchResult()
@@ -55,17 +46,15 @@ def chat(body: ChatRequest, request: Request, user=Depends(get_current_user),
     if credit:
         answer = answer + "\n\n" + credit
 
-    log = ChatLog(user_id=user.id, question=body.message, answer=answer, created_at=utc_now())
-    db.add(log)
+    created_at = utc_now()
     try:
-        db.commit()
+        log = save_chat_log(db, user.id, body.message, answer, created_at)
     except SQLAlchemyError as error:
-        db.rollback()
         # The answer is already made, so return it and tell the client it was not saved.
         logger.error("db_save_failure user_id=%s request_id=%s error_type=%s",
                      user.id, request_id, type(error).__name__)
         return ChatResponse(id=None, question=body.message, answer=answer,
-                            created_at=log.created_at, saved=False)
+                            created_at=created_at, saved=False)
     logger.info("db_save_success user_id=%s chat_id=%s request_id=%s",
                 user.id, log.id, request_id)
     return ChatResponse(id=log.id, question=log.question, answer=log.answer,
@@ -76,4 +65,4 @@ def chat(body: ChatRequest, request: Request, user=Depends(get_current_user),
 def my_chats(limit: int = Query(20, ge=1, le=100), user=Depends(get_current_user),
              db=Depends(get_db)):
     # Only the logged-in user's rows; the same query feeds the chat context.
-    return ChatHistoryResponse(items=recent_history(db, user.id, limit))
+    return ChatHistoryResponse(items=list_user_chats(db, user.id, limit))
