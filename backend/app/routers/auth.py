@@ -2,11 +2,10 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from ..crud.users import create_user, get_user_by_email
 from ..dependencies import get_current_user, get_db
-from ..models import User
 from ..openapi_errors import LOGIN_ERRORS, LOGOUT_ERRORS, ME_ERRORS, REGISTER_ERRORS
 from ..schemas import Credentials, UserPublic
 from ..security import hash_password, verify_password
@@ -19,16 +18,14 @@ DUMMY_HASH = hash_password("not-a-login-password")
 @router.post("/auth/register", response_model=UserPublic, status_code=201,
              responses=REGISTER_ERRORS)
 def register(body: Credentials, request: Request, db=Depends(get_db)):
-    if db.scalar(select(User).where(User.email == str(body.email))) is not None:
+    email = str(body.email)
+    if get_user_by_email(db, email) is not None:
         raise HTTPException(409, {"error": "EMAIL_EXISTS", "message": "이미 가입된 이메일입니다."})
-    user = User(email=str(body.email), password_hash=hash_password(body.password))
-    db.add(user)
     try:
-        db.commit()
+        user = create_user(db, email, hash_password(body.password))
     except IntegrityError as error:
-        db.rollback()
         # Re-check after the rollback to handle a concurrent registration race.
-        if db.scalar(select(User).where(User.email == str(body.email))) is not None:
+        if get_user_by_email(db, email) is not None:
             raise HTTPException(
                 409, {"error": "EMAIL_EXISTS", "message": "이미 가입된 이메일입니다."}
             ) from None
@@ -39,7 +36,7 @@ def register(body: Credentials, request: Request, db=Depends(get_db)):
 
 @router.post("/auth/login", response_model=UserPublic, responses=LOGIN_ERRORS)
 def login(body: Credentials, request: Request, db=Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == str(body.email)))
+    user = get_user_by_email(db, str(body.email))
     password_hash = user.password_hash if user else DUMMY_HASH
     if not verify_password(body.password, password_hash) or user is None:
         raise HTTPException(401, {"error": "INVALID_CREDENTIALS",

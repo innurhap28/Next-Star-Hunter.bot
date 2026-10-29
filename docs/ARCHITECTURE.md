@@ -23,6 +23,25 @@ flowchart LR
 | AI API | 질문과 최근 대화 문맥을 바탕으로 답변 생성 |
 | PostgreSQL | 사용자 정보 및 질문·응답 로그 저장 |
 
+## 프로젝트 구조
+
+```text
+backend/app/
+├── main.py           # 앱 생성, 미들웨어(세션·요청 로그), 라우터 등록
+├── config.py         # 환경 변수 설정 (Settings)
+├── database.py       # DB 엔진·세션 생성
+├── models.py         # SQLAlchemy 테이블 (users, chat_logs, star_profiles, star_chunks)
+├── schemas.py        # 요청·응답 Pydantic 스키마
+├── dependencies.py   # get_db, get_current_user (로그인 확인 공통 의존성)
+├── security.py       # 비밀번호 해시·검증
+├── routers/          # API 경로: auth.py(계정), chat.py(채팅·기록), pages.py(화면)
+├── crud/             # DB 접근 함수: users.py, chat_logs.py
+├── ai_client.py      # AI API 호출, 타임아웃·실패 처리
+└── star_search.py    # 스타 데이터 검색과 AI 참고 자료 구성
+```
+
+라우터는 요청 검증, HTTP 오류 응답, 로그 기록만 맡고, 쿼리와 저장(commit/rollback)은 `crud/` 함수를 호출합니다. 예를 들어 회원가입은 `get_user_by_email`, `create_user`를, 채팅은 `recent_chat_pairs`, `save_chat_log`를, 기록 조회는 `list_user_chats`를 사용합니다. 스타 데이터 검색 쿼리는 검색 로직과 붙어 있어 `star_search.py`에 그대로 둡니다.
+
 ## 구현 계획 체크리스트
 
 - [x] `frontend/`에서 로그인·회원가입 화면과 질문 입력 채팅 화면 구현

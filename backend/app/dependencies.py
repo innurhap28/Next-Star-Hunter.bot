@@ -1,6 +1,7 @@
 """Shared authentication and request-scoped database sessions."""
 from fastapi import Depends, HTTPException, Request
 
+from .crud.users import get_user
 from .database import build_engine, build_session_factory
 from .models import User
 
@@ -31,7 +32,7 @@ def get_current_user(request: Request, db=Depends(get_db)) -> User:
     user_id = request.session.get("user_id")
     if type(user_id) is not int:
         raise HTTPException(401, {"error": "LOGIN_REQUIRED", "message": "로그인이 필요합니다."})
-    user = db.get(User, user_id)
+    user = get_user(db, user_id)
     if user is None:
         request.session.clear()
         raise HTTPException(401, {"error": "LOGIN_REQUIRED", "message": "다시 로그인해주세요."})
