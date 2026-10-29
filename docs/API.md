@@ -17,8 +17,10 @@
 
 ## 인증
 
-- [ ] `POST /api/auth/register`: 회원가입 및 비밀번호 해시 저장
-- [ ] `POST /api/auth/login`: 로그인 및 인증 상태 생성
+- [x] `POST /api/auth/register`: 회원가입 및 비밀번호 해시 저장
+- [x] `POST /api/auth/login`: 로그인 및 인증 상태 생성
+- [x] `POST /api/auth/logout`: 로그아웃 (로그인 필요, `204`)
+- [x] `GET /api/me`: 로그인한 사용자 정보 조회
 - [ ] 비로그인 사용자의 대화 API 접근 차단
 
 회원가입 요청 예시:
@@ -30,7 +32,28 @@
 }
 ```
 
-비밀번호 원문은 DB나 응답에 저장·포함하지 않습니다. 중복 계정과 인증 실패는 사용자에게 이해 가능한 오류로 반환합니다.
+회원가입 성공 시 `201`, 로그인 성공 시 `200`으로 아래 형식의 사용자 정보를 돌려줍니다. `GET /api/me`도 같은 형식입니다.
+
+```json
+{
+  "id": 1,
+  "email": "user@example.com",
+  "created_at": "2026-10-29T12:00:00Z"
+}
+```
+
+비밀번호는 8자 이상 128자 이하입니다. 비밀번호 원문은 DB나 응답에 저장·포함하지 않습니다. 중복 계정과 인증 실패는 사용자에게 이해 가능한 오류로 반환합니다.
+
+| 상황 | 상태 코드 | `error` |
+| --- | --- | --- |
+| 입력 형식 오류(이메일 형식, 비밀번호 길이) | 422 | `VALIDATION_ERROR` |
+| 이미 가입된 이메일 | 409 | `EMAIL_EXISTS` |
+| 이메일 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
+| 로그인하지 않고 `logout`·`me` 호출 | 401 | `LOGIN_REQUIRED` |
+| 허용되지 않은 출처에서 요청 | 403 | `ORIGIN_NOT_ALLOWED` |
+| 서버 인증 설정 누락 | 503 | `AUTH_NOT_CONFIGURED` |
+| 서버 DB 설정 오류 | 503 | `DB_NOT_CONFIGURED` |
+| DB 요청 처리 실패 | 503 | `DB_UNAVAILABLE` |
 
 ## 채팅 및 기록
 
