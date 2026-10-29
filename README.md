@@ -173,3 +173,5 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 - DB 테이블 및 필드: [데이터베이스 문서](docs/DATABASE.md)
 
 저장소 링크, 배포 URL, 실제 실행 명령, 로그 확인 방법은 구현 및 배포 후 검증 가능한 값으로 채웁니다.
+
+<!-- probe -->
