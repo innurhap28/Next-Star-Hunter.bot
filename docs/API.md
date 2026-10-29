@@ -67,7 +67,7 @@
 
 - [x] `POST /api/chat`: 질문 검증, AI API 호출, 응답 및 로그 저장
 - [x] 최근 대화를 이용해 같은 사용자의 문맥 유지
-- [ ] `GET /api/me/chats`: 로그인한 사용자의 대화 기록 조회
+- [x] `GET /api/me/chats`: 로그인한 사용자의 대화 기록 조회
 - [x] AI 실패·시간 초과 시 오류 안내와 서버 로그 기록
 
 ### `POST /api/chat`
@@ -135,6 +135,41 @@ INFO next_star_hunter db_save_success user_id=12 chat_id=987 request_id=...
 
 실패하면 `ai_call_failure request_id=... error=AI_TIMEOUT reason=ReadTimeout` 또는 `db_save_failure user_id=12 request_id=... error_type=OperationalError`가 남습니다.
 
-### 대화 기록 조회
+### `GET /api/me/chats`
 
-대화 기록 조회 결과에는 질문, 응답, 생성 시각을 포함합니다. 사용자는 자신의 기록만 조회할 수 있어야 합니다. 조회 API는 아직 구현 전입니다.
+로그인한 사용자의 대화 기록 중 최신 `limit`건을 오래된 순서로 돌려줍니다. 다른 사용자의 기록은 조회되지 않습니다. `limit`은 1 이상 100 이하이고 기본값은 20입니다.
+
+요청 예시: `GET /api/me/chats?limit=2`
+
+성공 응답 예시 `200 OK`:
+
+```json
+{
+  "items": [
+    {
+      "id": 7,
+      "question": "안경을 쓴 부산 출신 아이돌을 추천해줘",
+      "answer": "조건에 맞는 스타를 찾아볼게요.",
+      "created_at": "2026-10-29T12:00:00Z"
+    },
+    {
+      "id": 8,
+      "question": "그중에서 배우 활동도 하는 사람은?",
+      "answer": "배우 활동을 함께 하는 스타를 골라볼게요.",
+      "created_at": "2026-10-29T12:01:30Z"
+    }
+  ]
+}
+```
+
+기록이 없으면 `{"items": []}`를 돌려줍니다. DB 저장에 실패해 `saved`가 `false`였던 대화는 기록에 나오지 않습니다.
+
+| 상황 | 상태 코드 | `error` |
+| --- | --- | --- |
+| 로그인하지 않음 | 401 | `LOGIN_REQUIRED` |
+| `limit`이 범위를 벗어나거나 정수가 아님 | 422 | `VALIDATION_ERROR` |
+| DB 요청 실패 | 503 | `DB_UNAVAILABLE` |
+
+`422` 응답의 `fields`는 `[["query", "limit"]]`입니다.
+
+DB에서 직접 확인할 때는 `scripts/check_logs.sql`을 사용합니다. 사용 방법은 [데이터베이스 문서](DATABASE.md)에 적었습니다.

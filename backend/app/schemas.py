@@ -50,6 +50,19 @@ class ChatResponse(BaseModel):
     saved: bool
 
 
+class ChatLogItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    question: str
+    answer: str
+    created_at: datetime
+
+
+class ChatHistoryResponse(BaseModel):
+    # Latest N rows of the user, ordered oldest first.
+    items: list[ChatLogItem]
+
+
 class ErrorResponse(BaseModel):
     """Public error envelope; never includes request input or credentials."""
     model_config = ConfigDict(extra="forbid")

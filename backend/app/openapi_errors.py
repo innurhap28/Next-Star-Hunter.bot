@@ -134,3 +134,14 @@ CHAT_ERRORS = {
         }),
     ]),
 }
+
+HISTORY_ERRORS = {
+    401: LOGIN_REQUIRED,
+    422: error_response("조회 개수 검증 실패. limit은 1 이상 100 이하의 정수여야 합니다.", [
+        ("limit", "limit 범위 또는 형식 오류", {
+            "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
+            "fields": [["query", "limit"]],
+        }),
+    ], ValidationErrorResponse),
+    503: SERVICE_ERROR,
+}
