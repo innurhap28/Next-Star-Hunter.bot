@@ -54,6 +54,8 @@ button { color: inherit; }
 .auth-form input::placeholder { color: #aaa39a; }
 .form-message { min-height: 18px; margin: 10px 0 0; color: #43805c; font-size: 12px; }
 .form-message.is-error { color: #bd493e; }
+.form-notice { margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; background: #fff4e5; color: #8a5a14; font-size: 13px; }
+.form-notice[hidden] { display: none; }
 .auth-form button:disabled, .topbar-link:disabled { cursor: wait; opacity: .65; }
 .auth-footnote { margin: 4px 0 0; text-align: center; font-size: 11px; }
 .auth-caption { margin: 24px 0 0; color: #9a9187; font-size: 12px; }

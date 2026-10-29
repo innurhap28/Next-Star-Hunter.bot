@@ -8,6 +8,17 @@
     message.classList.toggle("is-error", isError);
   };
 
+  // Shown when another login replaced this session (the chat page redirects here).
+  const notice = document.querySelector("[data-session-notice]");
+  const params = new URLSearchParams(window.location.search);
+  if (notice && params.get("reason") === "session_replaced") {
+    notice.textContent = "다른 곳에서 로그인되어 로그아웃되었어요. 다시 로그인해 주세요.";
+    notice.hidden = false;
+    params.delete("reason");
+    const query = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+  }
+
   const selectTab = (name) => {
     tabs.forEach((tab) => {
       const active = tab.dataset.authTab === name;
