@@ -3,6 +3,7 @@
       - any-glob-to-any-file:
           - backend/app/templates/**
           - backend/app/static/**
+          - frontend/**
 
 "area: backend":
   - changed-files:
@@ -30,4 +31,4 @@
       - any-glob-to-any-file:
           - "**/models/**"
           - "**/migrations/**"
-          - "*.sql"
+          - "**/*.sql"
