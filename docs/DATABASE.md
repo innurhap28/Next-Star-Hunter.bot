@@ -117,9 +117,11 @@ erDiagram
 인덱스:
 
 - `star_profiles.title` 고유 인덱스, `star_chunks (profile_id, chunk_index)` 고유 인덱스
-- 검색용 GIN 인덱스는 적재 스크립트가 PostgreSQL 에서만 만듭니다.
-  - `pg_trgm` 을 쓸 수 있으면 `title`, `aliases`, `content` 에 `gin_trgm_ops` 인덱스 (`LIKE '%아이유%'`, 유사도 검색용)
+- 검색용 인덱스는 적재 스크립트가 PostgreSQL 에서만 만듭니다.
+  - `star_profiles (kind, gender)`, `(debut_year)`, `(birth_year)` B-tree 인덱스 (채팅 검색의 조건 필터용)
+  - `pg_trgm` 을 쓸 수 있으면 `title`, `aliases` 에 `gin_trgm_ops` 인덱스 (`LIKE '%아이유%'`, 유사도 검색용)
   - 확장을 만들 권한이 없으면 대신 `to_tsvector('simple', ...)` 전문 검색 인덱스를 만듭니다.
+  - `content` 인덱스는 `--content-index trgm` 일 때만 만듭니다 (전체 덤프 기준 약 300MB, `docs/DATA.md` 참고).
 
 두 테이블에는 출처와 라이선스(CC BY-NC-SA 2.0 KR, 비영리)를 적은 테이블 주석이 붙어 있습니다. 자세한 이용 조건은 `docs/DATA.md` 를 봅니다.
 

@@ -11,6 +11,7 @@ from ..dependencies import get_current_user, get_db
 from ..models import ChatLog, utc_now
 from ..openapi_errors import CHAT_ERRORS, HISTORY_ERRORS
 from ..schemas import ChatHistoryResponse, ChatRequest, ChatResponse
+from ..star_search import StarSearchResult, format_reference, search_stars, source_line
 
 router = APIRouter(prefix="/api", tags=["chat"])
 logger = logging.getLogger("next_star_hunter")
@@ -32,11 +33,17 @@ def chat(body: ChatRequest, request: Request, user=Depends(get_current_user),
     settings = request.app.state.settings
     request_id = request.state.request_id
     history = recent_history(db, user.id)
+    previous = history[-1].question if history else None
+    # Star data lookup never raises; with no data the AI answers without references.
+    found = StarSearchResult()
+    if settings.llm_configured():
+        found = search_stars(db.get_bind(), body.message, previous, request_id=request_id)
     # Message text and answers are never logged; only ids, timing, and error codes.
     logger.info("ai_call_start user_id=%s request_id=%s", user.id, request_id)
     started = time.monotonic()
     try:
-        answer = ask_ai(settings, history, body.message, transport=request.app.state.ai_transport)
+        answer = ask_ai(settings, history, body.message, transport=request.app.state.ai_transport,
+                        references=format_reference(found))
     except AIError as error:
         logger.warning("ai_call_failure request_id=%s error=%s reason=%s",
                        request_id, error.code, error.reason)
@@ -44,6 +51,9 @@ def chat(body: ChatRequest, request: Request, user=Depends(get_current_user),
                             {"error": error.code, "message": error.message}) from None
     latency_ms = int((time.monotonic() - started) * 1000)
     logger.info("ai_call_success request_id=%s latency_ms=%s", request_id, latency_ms)
+    credit = source_line(found)
+    if credit:
+        answer = answer + "\n\n" + credit
 
     log = ChatLog(user_id=user.id, question=body.message, answer=answer, created_at=utc_now())
     db.add(log)
