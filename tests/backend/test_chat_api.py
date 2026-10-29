@@ -11,11 +11,11 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.ai_client import SYSTEM_PROMPT
 from app.config import Settings
 from app.database import Base
 from app.main import create_app
 from app.models import ChatLog, User
+from app.services.ai_client import SYSTEM_PROMPT
 
 ACCOUNT = {"email": "chat-user@example.com", "password": "chat-test-password-123"}
 API_KEY = "test-llm-key-do-not-leak"

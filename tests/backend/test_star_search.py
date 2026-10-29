@@ -10,11 +10,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from test_chat_api import ACCOUNT, ANSWER, FakeAI, make_settings
 
-from app.ai_client import SYSTEM_PROMPT
 from app.database import Base
 from app.main import create_app
 from app.models import ChatLog, StarChunk, StarProfile
-from app.star_search import format_reference, parse_query, search_stars, source_line
+from app.services.ai_client import SYSTEM_PROMPT
+from app.services.star_search import format_reference, parse_query, search_stars, source_line
 
 URL = "https://namu.wiki/w/"
 

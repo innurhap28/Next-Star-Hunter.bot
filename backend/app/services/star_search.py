@@ -18,7 +18,7 @@ from sqlalchemy import and_, func, literal, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 
-from .models import StarChunk, StarProfile
+from ..models import StarChunk, StarProfile
 
 logger = logging.getLogger("next_star_hunter")
 
