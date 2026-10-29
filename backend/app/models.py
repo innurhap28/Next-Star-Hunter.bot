@@ -1,4 +1,4 @@
-"""Initial user and chat-log tables agreed in the team DB plan, plus star reference data."""
+"""User, login-session and chat-log tables agreed in the team DB plan, plus star reference data."""
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -26,6 +26,17 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(254), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(256), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+class UserSession(Base):
+    """The one active login per user. Only a SHA-256 hash of the cookie's session id is kept."""
+    __tablename__ = "user_sessions"
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    session_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
