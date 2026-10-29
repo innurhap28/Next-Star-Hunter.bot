@@ -16,6 +16,31 @@ from .routers import auth
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("next_star_hunter")
 
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def is_same_origin(origin, request):
+    """Origin must match Host; loopback names on the same scheme and port count as one."""
+    host = request.headers.get("host", "")
+    try:
+        parsed = urlsplit(origin)
+        if parsed.scheme not in DEFAULT_PORTS:
+            return False
+        if parsed.netloc == host:
+            return True
+        # Local docs opened at localhost may call 127.0.0.1 (or the reverse).
+        target = urlsplit("//" + host)
+        if parsed.hostname not in LOOPBACK_HOSTS or target.hostname not in LOOPBACK_HOSTS:
+            return False
+        scheme = parsed.scheme
+        if scheme != request.url.scheme:
+            return False
+        return (parsed.port or DEFAULT_PORTS[scheme]) == (target.port or DEFAULT_PORTS[scheme])
+    except ValueError:
+        return False
+
+
 def create_app(settings=None, session_factory=None):
     settings = settings or Settings()
     @asynccontextmanager
@@ -46,11 +71,7 @@ def create_app(settings=None, session_factory=None):
         logger.info("request_received method=%s path=%s request_id=%s", request.method, request.url.path, request_id)
         # Browser writes must come from the same origin. CLI clients without Origin are supported.
         origin = request.headers.get("origin")
-        try:
-            parsed = urlsplit(origin) if origin else None
-            bad_origin = parsed is not None and (parsed.scheme not in {"http", "https"} or parsed.netloc != request.headers.get("host"))
-        except ValueError:
-            bad_origin = True
+        bad_origin = bool(origin) and not is_same_origin(origin, request)
         if request.method in {"POST", "PUT", "PATCH", "DELETE"} and bad_origin:
             response = JSONResponse({"error": "ORIGIN_NOT_ALLOWED", "message": "허용되지 않은 요청 출처입니다."}, 403)
         else:
