@@ -38,7 +38,11 @@
     status.classList.toggle("is-error", isError);
   };
 
-  const goToLogin = () => window.location.assign("/auth");
+  // Another login replaces this session, so the next API call answers 401 SESSION_REPLACED.
+  const goToLogin = (error) => {
+    const replaced = error?.code === "SESSION_REPLACED";
+    window.location.assign(replaced ? "/auth?reason=session_replaced" : "/auth");
+  };
 
   const readResponse = async (response) => {
     if (response.status === 204) return null;
@@ -133,7 +137,7 @@
       scrollToBottom();
     } catch (error) {
       if (error.status === 401) {
-        goToLogin();
+        goToLogin(error);
         return;
       }
       setStatus(`이전 대화를 불러오지 못했어요. ${describeError(error)}`, true);
@@ -156,7 +160,7 @@
       if (logoutButton) logoutButton.hidden = false;
     } catch (error) {
       if (error.status === 401) {
-        goToLogin();
+        goToLogin(error);
         return;
       }
       console.info("Could not load the current session.", error.message);
@@ -237,7 +241,7 @@
       }
     } catch (error) {
       if (error.status === 401) {
-        goToLogin();
+        goToLogin(error);
         return;
       }
       pending.remove();
