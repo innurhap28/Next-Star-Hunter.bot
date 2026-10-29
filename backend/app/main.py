@@ -2,14 +2,16 @@
 import logging
 import secrets
 from contextlib import asynccontextmanager
-from uuid import UUID, uuid4
 from urllib.parse import urlsplit
+from uuid import UUID, uuid4
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy.exc import SQLAlchemyError
+
 from .config import Settings
 from .routers import auth
 
@@ -56,7 +58,8 @@ def create_app(settings=None, session_factory=None):
     app.state.session_factory = session_factory
     app.state.engine = None
     # Without a configured stable key, account APIs return 503; health still works.
-    app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY.get_secret_value() or secrets.token_hex(32),
+    secret_key = settings.SECRET_KEY.get_secret_value() or secrets.token_hex(32)
+    app.add_middleware(SessionMiddleware, secret_key=secret_key,
                        session_cookie="next_star_session", max_age=8 * 60 * 60,
                        same_site="lax", https_only=settings.SESSION_HTTPS_ONLY)
 
@@ -68,12 +71,14 @@ def create_app(settings=None, session_factory=None):
         except ValueError:
             request_id = str(uuid4())
         request.state.request_id = request_id
-        logger.info("request_received method=%s path=%s request_id=%s", request.method, request.url.path, request_id)
+        logger.info("request_received method=%s path=%s request_id=%s",
+                    request.method, request.url.path, request_id)
         # Browser writes must come from the same origin. CLI clients without Origin are supported.
         origin = request.headers.get("origin")
         bad_origin = bool(origin) and not is_same_origin(origin, request)
         if request.method in {"POST", "PUT", "PATCH", "DELETE"} and bad_origin:
-            response = JSONResponse({"error": "ORIGIN_NOT_ALLOWED", "message": "허용되지 않은 요청 출처입니다."}, 403)
+            response = JSONResponse({"error": "ORIGIN_NOT_ALLOWED",
+                                     "message": "허용되지 않은 요청 출처입니다."}, 403)
         else:
             response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
@@ -82,7 +87,10 @@ def create_app(settings=None, session_factory=None):
 
     @app.exception_handler(HTTPException)
     async def http_error(request, error):
-        body = error.detail if isinstance(error.detail, dict) else {"error": "HTTP_ERROR", "message": str(error.detail)}
+        if isinstance(error.detail, dict):
+            body = error.detail
+        else:
+            body = {"error": "HTTP_ERROR", "message": str(error.detail)}
         return JSONResponse(body, error.status_code, headers=error.headers)
 
     @app.exception_handler(RequestValidationError)
@@ -93,8 +101,10 @@ def create_app(settings=None, session_factory=None):
 
     @app.exception_handler(SQLAlchemyError)
     async def db_error(request, error):
-        logger.error("db_operation_failure request_id=%s error_type=%s", request.state.request_id, type(error).__name__)
-        return JSONResponse({"error": "DB_UNAVAILABLE", "message": "현재 DB 요청을 처리할 수 없습니다. 잠시 후 다시 시도해주세요."}, 503)
+        logger.error("db_operation_failure request_id=%s error_type=%s",
+                     request.state.request_id, type(error).__name__)
+        message = "현재 DB 요청을 처리할 수 없습니다. 잠시 후 다시 시도해주세요."
+        return JSONResponse({"error": "DB_UNAVAILABLE", "message": message}, 503)
 
     @app.get("/health", tags=["system"])
     async def health_check():
