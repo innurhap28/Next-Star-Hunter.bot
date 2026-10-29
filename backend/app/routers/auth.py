@@ -7,13 +7,14 @@ from ..dependencies import get_current_user, get_db
 from ..models import User
 from ..schemas import Credentials, UserPublic
 from ..security import hash_password, verify_password
+from ..openapi_errors import REGISTER_ERRORS, LOGIN_ERRORS, LOGOUT_ERRORS, ME_ERRORS
 
 router = APIRouter(prefix="/api", tags=["accounts"])
 logger = logging.getLogger("next_star_hunter")
 # Unknown-account logins also run the same password verification operation.
 DUMMY_HASH = hash_password("not-a-login-password")
 
-@router.post("/auth/register", response_model=UserPublic, status_code=201)
+@router.post("/auth/register", response_model=UserPublic, status_code=201, responses=REGISTER_ERRORS)
 def register(body: Credentials, request: Request, db=Depends(get_db)):
     if db.scalar(select(User).where(User.email == str(body.email))) is not None:
         raise HTTPException(409, {"error": "EMAIL_EXISTS", "message": "이미 가입된 이메일입니다."})
@@ -30,7 +31,7 @@ def register(body: Credentials, request: Request, db=Depends(get_db)):
     logger.info("db_save_success action=register user_id=%s request_id=%s", user.id, request.state.request_id)
     return user
 
-@router.post("/auth/login", response_model=UserPublic)
+@router.post("/auth/login", response_model=UserPublic, responses=LOGIN_ERRORS)
 def login(body: Credentials, request: Request, db=Depends(get_db)):
     user = db.scalar(select(User).where(User.email == str(body.email)))
     if not verify_password(body.password, user.password_hash if user else DUMMY_HASH) or user is None:
@@ -40,11 +41,11 @@ def login(body: Credentials, request: Request, db=Depends(get_db)):
     logger.info("login_success user_id=%s request_id=%s", user.id, request.state.request_id)
     return user
 
-@router.post("/auth/logout", status_code=204)
+@router.post("/auth/logout", status_code=204, responses=LOGOUT_ERRORS)
 def logout(request: Request, user=Depends(get_current_user)):
     request.session.clear()
     return Response(status_code=204)
 
-@router.get("/me", response_model=UserPublic)
+@router.get("/me", response_model=UserPublic, responses=ME_ERRORS)
 def me(user=Depends(get_current_user)):
     return user
