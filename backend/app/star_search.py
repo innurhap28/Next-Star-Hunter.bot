@@ -482,8 +482,27 @@ def search_stars(engine: Engine, message: str, previous: Optional[str] = None,
 GENDER_LABEL = {"M": "남", "F": "여"}
 
 
+REF_OPEN = "<참고자료>"
+REF_CLOSE = "</참고자료>"
+# '<참고자료>', '</참고자료>' and spaced variants such as '< / 참고 자료 >'
+_REF_TAG = re.compile(r"<\s*/?\s*참고\s*자료\s*>")
+
+
+def _strip_ref_tags(value: str) -> str:
+    """Remove the block tags from wiki text so it cannot close the block early."""
+    prev = None
+    while prev != value:  # '</참고</참고자료>자료>' leaves a tag after one pass
+        prev, value = value, _REF_TAG.sub("", value)
+    return value
+
+
 def format_reference(result: StarSearchResult) -> str:
-    """The '참고 자료' block for the system prompt ('' when nothing was found)."""
+    """The '참고 자료' block for the system prompt ('' when nothing was found).
+
+    Everything between REF_OPEN and REF_CLOSE comes from namuwiki, which anyone can
+    edit, so the tags are stripped from the body and SYSTEM_PROMPT tells the model to
+    treat the block as data only.
+    """
     if not result.stars:
         return ""
     lines = ["참고 자료 (나무위키 문서를 정제·발췌한 것, CC BY-NC-SA 2.0 KR)"]
@@ -515,7 +534,8 @@ def format_reference(result: StarSearchResult) -> str:
         for snip in s["snippets"]:
             lines.append(f"   [{snip['section']}] {snip['text']}")
         lines.append("   출처: " + s["source_url"])
-    return "\n".join(lines)
+    body = _strip_ref_tags("\n".join(lines))
+    return REF_OPEN + "\n" + body + "\n" + REF_CLOSE
 
 
 def source_line(result: StarSearchResult) -> str:
