@@ -28,7 +28,7 @@ def make_settings(**changes):
                   DATABASE_URL="postgresql+psycopg://unused:unused@localhost/test",
                   SESSION_HTTPS_ONLY=True, ENABLE_API_DOCS=True,
                   LLM_API_KEY=API_KEY, LLM_BASE_URL="https://llm.example.test/v1",
-                  LLM_API_STYLE="anthropic", LLM_MODEL="test-model",
+                  LLM_API_STYLE="anthropic", LLM_MODEL="claude-sonnet-4",
                   LLM_TIMEOUT_SECONDS=5, LLM_MAX_COMPLETION_TOKENS=512)
     values.update(changes)
     return Settings(_env_file=None, **values)
@@ -101,7 +101,7 @@ def test_anthropic_request_format(api):
     assert request.headers["x-api-key"] == API_KEY
     assert request.headers["anthropic-version"]
     body = fake.last_body()
-    assert body["model"] == "test-model"
+    assert body["model"] == "claude-sonnet-4"
     assert body["max_tokens"] == 512
     assert body["system"] == SYSTEM_PROMPT
     assert body["messages"] == [{"role": "user", "content": QUESTION}]
