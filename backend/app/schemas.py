@@ -1,6 +1,9 @@
 """Explicit authentication request/response contract."""
 from datetime import datetime
+from typing import Union
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
 
 class Credentials(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -28,3 +31,15 @@ class UserPublic(BaseModel):
     id: int
     email: str
     created_at: datetime
+
+
+class ErrorResponse(BaseModel):
+    """Public error envelope; never includes request input or credentials."""
+    model_config = ConfigDict(extra="forbid")
+    error: str
+    message: str
+
+
+class ValidationErrorResponse(ErrorResponse):
+    """Field locations only, including integer positions for invalid JSON."""
+    fields: list[list[Union[str, int]]]
