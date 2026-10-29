@@ -123,6 +123,16 @@ def test_deleted_session_user_matches_swagger(api, path, method):
     check_error(client, path, method, client.request(method, path), 401, "stale_session")
 
 
+@pytest.mark.parametrize("path,method", [("/api/me","get"),("/api/auth/logout","post")])
+def test_replaced_session_matches_swagger(api, path, method):
+    client, _ = api
+    assert client.post("/api/auth/register", json=ACCOUNT).status_code == 201
+    assert client.post("/api/auth/login", json=ACCOUNT).status_code == 200
+    with TestClient(client.app, base_url="https://testserver") as other:
+        assert other.post("/api/auth/login", json=ACCOUNT).status_code == 200
+    check_error(client, path, method, client.request(method, path), 401, "session_replaced")
+
+
 def test_duplicate_email_matches_swagger(api):
     client, _ = api
     assert client.post("/api/auth/register", json=ACCOUNT).status_code == 201
