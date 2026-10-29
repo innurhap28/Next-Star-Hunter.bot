@@ -1,0 +1,19 @@
+namu_sample.json - 출처와 라이선스
+
+내용: 나무위키(https://namu.wiki) 문서 14건을 발췌한 것입니다.
+각 레코드의 "text"는 원문 나무마크를 1,500자 이하의 줄바꿈 위치에서 잘랐습니다.
+그 밖에는 바꾸지 않았습니다. 리다이렉트 레코드는 원문 그대로입니다.
+
+출처: 나무위키 (https://namu.wiki)
+  덤프: yourwiki-namumark-20260829-build20261002
+  (비공식, archive.org 의 2026-08-29 나무위키 크롤링을 나무마크로 되돌린 것)
+  https://huggingface.co/datasets/iamtalker/yourwiki-namumark-20260829
+원저작자: 나무위키 기여자 (문서별 역사: https://namu.wiki/history/<문서 제목>)
+
+라이선스: CC BY-NC-SA 2.0 KR
+  https://creativecommons.org/licenses/by-nc-sa/2.0/kr/
+  - 출처 표시 (출처와 문서 링크, 변경·발췌했다는 사실을 밝힘)
+  - 비영리 목적으로만 이용
+  - 2차 저작물은 같은 라이선스로 공개
+
+이 픽스처를 다른 곳에 복사할 때는 이 파일도 함께 복사합니다.

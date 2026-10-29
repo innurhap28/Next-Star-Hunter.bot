@@ -20,6 +20,8 @@ def clean_env(monkeypatch):
 def test_defaults_without_llm_env():
     settings = Settings(_env_file=None)
     assert settings.LLM_API_STYLE == "anthropic"
+    assert settings.LLM_BASE_URL == "https://copa.codyssey.kr/v1"
+    assert settings.LLM_MODEL == "claude-sonnet-4"
     assert settings.LLM_TIMEOUT_SECONDS == 90
     assert settings.LLM_MAX_COMPLETION_TOKENS == 8000
     assert settings.LLM_JSON_MODE is False
@@ -33,7 +35,7 @@ def test_reads_llm_values_from_env(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "test-llm-key-value")
     monkeypatch.setenv("LLM_BASE_URL", "https://llm.example.test/v1")
     monkeypatch.setenv("LLM_API_STYLE", "openai")
-    monkeypatch.setenv("LLM_MODEL", "test-model")
+    monkeypatch.setenv("LLM_MODEL", "claude-haiku-4")
     monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "30.5")
     monkeypatch.setenv("LLM_MAX_COMPLETION_TOKENS", "1024")
     monkeypatch.setenv("LLM_JSON_MODE", "true")
@@ -42,6 +44,7 @@ def test_reads_llm_values_from_env(monkeypatch):
     settings = Settings(_env_file=None)
     assert settings.LLM_API_KEY.get_secret_value() == "test-llm-key-value"
     assert settings.LLM_API_STYLE == "openai"
+    assert settings.LLM_MODEL == "claude-haiku-4"
     assert settings.LLM_TIMEOUT_SECONDS == 30.5
     assert settings.LLM_MAX_COMPLETION_TOKENS == 1024
     assert settings.LLM_JSON_MODE is True
@@ -60,6 +63,8 @@ def test_empty_values_from_env_example_use_defaults(tmp_path):
 
 @pytest.mark.parametrize("key, value", [
     ("LLM_API_STYLE", "gemini"),
+    ("LLM_MODEL", "claude-opus-4-8"),
+    ("LLM_MODEL", "gpt-5.4"),
     ("LLM_TIMEOUT_SECONDS", "0"),
     ("LLM_TIMEOUT_SECONDS", "-5"),
     ("LLM_MAX_COMPLETION_TOKENS", "0"),
@@ -72,12 +77,16 @@ def test_invalid_values_are_rejected(monkeypatch, key, value):
         Settings(_env_file=None)
 
 
-def test_llm_configured_needs_key_url_and_model():
-    base = {"LLM_API_KEY": "k", "LLM_BASE_URL": "https://llm.example.test", "LLM_MODEL": "m"}
+def test_llm_configured_needs_key_and_url():
+    base = {"LLM_API_KEY": "k", "LLM_BASE_URL": "https://llm.example.test"}
     assert Settings(_env_file=None, **base).llm_configured()
     for missing in base:
         values = dict(base, **{missing: ""})
         assert not Settings(_env_file=None, **values).llm_configured()
+
+
+def test_only_api_key_is_needed_for_copa():
+    assert Settings(_env_file=None, LLM_API_KEY="k").llm_configured()
 
 
 def test_api_key_is_hidden_in_repr():
