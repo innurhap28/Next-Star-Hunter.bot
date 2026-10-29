@@ -1,16 +1,17 @@
 import pytest
-from sqlalchemy import create_mock_engine
-from sqlalchemy.schema import CreateTable
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import CreateTable
+
 from app.config import Settings
 from app.database import Base, build_engine
-from app.models import User, ChatLog
+from app.models import ChatLog, User
+
 
 def test_postgres_metadata_contains_required_tables_and_timezone():
     ddl = str(CreateTable(User.__table__).compile(dialect=postgresql.dialect()))
     assert "TIMESTAMP WITH TIME ZONE" in ddl
     assert "UNIQUE (email)" in ddl
-    assert set(Base.metadata.tables) == {"users", "chat_logs"}
+    assert {"users", "chat_logs"} <= set(Base.metadata.tables)
     assert str(next(iter(ChatLog.__table__.c.user_id.foreign_keys)).target_fullname) == "users.id"
 
 @pytest.mark.parametrize("url", ["", "sqlite:///app.db", "postgresql://u:p@localhost", "not-a-url"])

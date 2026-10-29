@@ -63,7 +63,7 @@ FastAPI는 화면, 인증, 질문 요청을 처리합니다. 질문을 받은 �
 
 ## API 및 로그 확인
 
-API의 실제 경로와 요청·응답 예시는 구현 기준으로 [API 명세](docs/API.md)에 기록합니다. 로그인 사용자는 자신의 대화 로그를 조회할 수 있어야 합니다. 로그 조회 API/화면 또는 검증 SQL·스크립트 중 제공되는 방법을 문서에 명시합니다.
+API의 실제 경로와 요청·응답 예시는 구현 기준으로 [API 명세](docs/API.md)에 기록합니다. 로그인 사용자는 `GET /api/me/chats`로 자신의 대화 로그를 조회할 수 있고, DB에서는 `scripts/check_logs.sql`로 확인합니다. 확인 방법은 [데이터베이스 문서](docs/DATABASE.md#대화-로그-확인-방법)에 정리했습니다.
 
 서버 로그에는 요청 수신, AI 호출 시작 및 성공/실패, DB 저장 성공/실패 이벤트를 남깁니다. 민감정보와 API 키는 로그에 기록하지 않습니다.
 
@@ -100,6 +100,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
+### 웹 화면 열기
+
+서버를 실행한 뒤 브라우저에서 `http://127.0.0.1:8000/`를 엽니다. 로그인하지 않았다면 `/auth`(로그인·회원가입 화면)로 이동하고, 로그인하면 `/`에서 채팅 화면을 볼 수 있습니다. 로그인한 상태에서 `/auth`를 열면 `/`로 이동합니다. 화면 파일은 `frontend/templates`, CSS와 JS는 `frontend/static`에 있고 `/static` 경로로 제공됩니다. 회원가입과 로그인은 `.env`의 `SECRET_KEY`, `DATABASE_URL` 설정이 있어야 동작합니다. 채팅 화면은 페이지를 열 때 `GET /api/me/chats`로 최근 대화를 불러오고, 질문은 `POST /api/chat`으로 보냅니다(두 API가 develop에 들어가야 실제로 동작합니다).
+
 ### Health 확인
 
 서버 실행 상태를 유지한 채 새 터미널에서 요청합니다.
@@ -132,9 +136,9 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 | `DATABASE_URL` | PostgreSQL 데이터베이스 연결 주소 |
 | `LOG_FILE_PATH` | 선택 사항인 로그 파일 경로 |
 | `LLM_API_KEY` | AI API 인증 키 |
-| `LLM_BASE_URL` | AI API 호환 엔드포인트 |
+| `LLM_BASE_URL` | AI API 주소. 기본값 copa(`https://copa.codyssey.kr/v1`) |
 | `LLM_API_STYLE` | AI API 요청 형식 선택 |
-| `LLM_MODEL` | 사용할 모델 ID |
+| `LLM_MODEL` | 모델. 기본값 `claude-sonnet-4`(예비로 `claude-haiku-4`만 허용) |
 | `LLM_TIMEOUT_SECONDS` | AI API 호출 시간 제한(초) |
 | `LLM_MAX_COMPLETION_TOKENS` | 응답 최대 토큰 수 |
 | `LLM_JSON_MODE` | JSON 응답 모드 사용 여부 |
@@ -171,6 +175,7 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 - 시스템 구조: [아키텍처 문서](docs/ARCHITECTURE.md)
 - API 요청·응답 명세: [API 문서](docs/API.md)
 - DB 테이블 및 필드: [데이터베이스 문서](docs/DATABASE.md)
+- 스타 자료 출처·라이선스·추출·DB 적재 방법: [데이터 문서](docs/DATA.md)
 - 배포 절차와 운영 환경 변수: [배포 런북](docs/DEPLOY.md)
 
 저장소 링크, 배포 URL, 실제 실행 명령, 로그 확인 방법은 구현 및 배포 후 검증 가능한 값으로 채웁니다.

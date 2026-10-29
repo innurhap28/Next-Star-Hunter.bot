@@ -1,0 +1,13 @@
+{
+  "purpose": "로컬 Swagger GET /health 정상 응답 증빙",
+  "date": "2026-10-30",
+  "endpoint": "/health",
+  "http_status": 200,
+  "response_body": {
+    "status": "ok",
+    "service": "next-star-hunter"
+  },
+  "headers": ["x-request-id", "cache-control: no-store"],
+  "image": "swagger-health-200.png",
+  "not_checked": ["실제 PostgreSQL 연결", "회원가입·로그인 통합", "AI API 호출", "외부 배포"]
+}
