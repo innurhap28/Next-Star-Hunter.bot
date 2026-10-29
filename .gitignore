@@ -30,7 +30,7 @@ pytest-cache-files-*/
 .idea/
 .vscode/
 
-# 개인 에이전트 파일
+# 개인 작업 메모
 docs/PROGRESS.md
 
 # 개인 설정 스크립트
