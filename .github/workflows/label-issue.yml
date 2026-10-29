@@ -1,0 +1,68 @@
+name: 이슈 라벨 자동화
+
+# 규칙 5: 어떤 경우에도 실패하지 않는다.
+# - 목표 라벨은 허용목록(AREAS/PRIORITIES) 통과 값으로만 만든다 → 잘못된 값은 라벨이 되지 않는다.
+# - 제거 대상은 "이슈에 실제로 붙어 있는" area:/priority: 라벨에서만 고른다 → 없는 라벨 제거 시도 없음.
+# - 각 API 호출은 try/catch로 감싼다 → 경합(404)·라벨 미존재(422) 같은 오류가 job 실패로 번지지 않는다.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const AREAS = ['backend', 'frontend', 'docs', 'infra', 'db'];
+            const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
+
+            const issue = context.payload.issue || {};
+            const lines = (issue.body || '').split(/\r?\n/);
+            function valueAfter(heading) {
+              const start = lines.findIndex((line) => line.trim() === `### ${heading}`);
+              if (start === -1) return '';
+              for (let i = start + 1; i < lines.length; i += 1) {
+                const text = lines[i].trim();
+                if (text === '') continue;
+                if (text.startsWith('### ')) return '';
+                return text;
+              }
+              return '';
+            }
+
+            const desired = [];
+            const area = valueAfter('분야');
+            if (AREAS.includes(area)) desired.push(`area: ${area}`);
+            const priority = valueAfter('우선순위');
+            if (PRIORITIES.includes(priority)) desired.push(`priority: ${priority}`);
+
+            const current = (issue.labels || [])
+              .map((label) => (typeof label === 'string' ? label : label && label.name))
+              .filter(Boolean);
+            const managed = current.filter((name) => name.startsWith('area: ') || name.startsWith('priority: '));
+
+            async function safely(action) {
+              try {
+                await action();
+              } catch (error) {
+                core.info(`라벨 갱신 건너뜀: ${error.message}`);
+              }
+            }
+
+            for (const name of managed) {
+              if (!desired.includes(name)) {
+                await safely(() => github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name }));
+              }
+            }
+            for (const name of desired) {
+              if (!current.includes(name)) {
+                await safely(() => github.rest.issues.addLabels({ ...context.repo, issue_number: issue.number, labels: [name] }));
+              }
+            }
