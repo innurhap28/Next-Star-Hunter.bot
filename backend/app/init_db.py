@@ -22,7 +22,7 @@ def main():
     finally:
         if engine is not None:
             engine.dispose()
-    print("Database tables ready: users, chat_logs")
+    print("Database tables ready: users, user_sessions, chat_logs")
     return 0
 
 if __name__ == "__main__":

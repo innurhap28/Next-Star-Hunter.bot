@@ -14,10 +14,11 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings
-from .routers import auth, chat, pages
+from .logging_config import LOGGER_NAME, setup_console_logging, setup_file_logging
+from .routers import auth, chat, logs, pages
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-logger = logging.getLogger("next_star_hunter")
+setup_console_logging()
+logger = logging.getLogger(LOGGER_NAME)
 
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 DEFAULT_PORTS = {"http": 80, "https": 443}
@@ -46,6 +47,7 @@ def is_same_origin(origin, request):
 
 def create_app(settings=None, session_factory=None, ai_transport=None):
     settings = settings or Settings()
+    setup_file_logging(settings.LOG_FILE_PATH)
     @asynccontextmanager
     async def lifespan(app):
         yield
@@ -116,6 +118,7 @@ def create_app(settings=None, session_factory=None, ai_transport=None):
     app.mount("/static", StaticFiles(directory=str(pages.STATIC_DIR)), name="static")
     app.include_router(auth.router)
     app.include_router(chat.router)
+    app.include_router(logs.router)
     app.include_router(pages.router)
     return app
 

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     DATABASE_URL: SecretStr = SecretStr("")
     SESSION_HTTPS_ONLY: bool = False
     ENABLE_API_DOCS: bool = False
+    # 비어 있으면 콘솔에만 남기고, 경로가 있으면 같은 형식으로 파일에도 남긴다.
     LOG_FILE_PATH: str = ""
 
     # AI API. 키가 없어도 서버는 뜨고, 채팅 기능만 llm_configured()로 막는다.
@@ -28,10 +29,6 @@ class Settings(BaseSettings):
     LLM_MODEL: Literal["claude-sonnet-4", "claude-haiku-4"] = "claude-sonnet-4"
     LLM_TIMEOUT_SECONDS: float = Field(default=90, gt=0)
     LLM_MAX_COMPLETION_TOKENS: int = Field(default=8000, gt=0)
-    LLM_JSON_MODE: bool = False
-    CHAT_TOTAL_TIMEOUT_SECONDS: float = Field(default=105, gt=0)
-    KNOWLEDGE_USAGE_SCOPE: Literal["educational_noncommercial", "commercial"] = (
-        "educational_noncommercial")
 
     def auth_configured(self) -> bool:
         return (len(self.SECRET_KEY.get_secret_value()) >= 32

@@ -15,10 +15,16 @@ PostgreSQL을 사용합니다. 아래 스키마를 기준으로 구현하고, �
 ```mermaid
 erDiagram
     USERS ||--o{ CHAT_LOGS : owns
+    USERS ||--o| USER_SESSIONS : "logged in as"
     USERS {
         integer id PK
         varchar email UK
         varchar password_hash
+        timestamptz created_at
+    }
+    USER_SESSIONS {
+        integer user_id PK, FK
+        varchar session_hash
         timestamptz created_at
     }
     CHAT_LOGS {
@@ -54,7 +60,7 @@ erDiagram
     }
 ```
 
-한 사용자는 여러 대화 로그를 가질 수 있습니다. 각 로그는 하나의 사용자에게 속합니다.
+한 사용자는 여러 대화 로그를 가질 수 있습니다. 각 로그는 하나의 사용자에게 속합니다. 로그인 세션은 사용자당 최대 하나입니다.
 
 `star_profiles`, `star_chunks` 는 챗봇이 참고할 스타 자료입니다. 사용자 데이터와 연결하지 않고, 앱이 아니라 적재 스크립트(`python -m scripts.namuwiki.load`)가 채웁니다. 한 스타 문서에 문단 조각이 여러 개 붙습니다.
 
@@ -68,6 +74,18 @@ erDiagram
 | `email` | 문자열, 고유 | 로그인 계정 식별자 |
 | `password_hash` | 문자열 | 비밀번호 해시. 원문 비밀번호는 저장하지 않습니다. |
 | `created_at` | 시간대 포함 시각 | 계정 생성 시각 |
+
+### `user_sessions`
+
+계정마다 지금 유효한 로그인 하나를 기록합니다. 새로 로그인하면 행을 덮어쓰므로 이전 세션은 `SESSION_REPLACED`로 끊깁니다([API 명세](API.md#계정당-세션-하나)).
+
+| 필드 | 형식 | 설명 |
+| --- | --- | --- |
+| `user_id` | 정수, 기본 키·외래 키 | `users.id` 참조 (사용자를 지우면 같이 지워짐) |
+| `session_hash` | 문자열(64) | 세션 쿠키에 든 세션 ID의 SHA-256 해시(16진수). 원래 ID는 저장하지 않습니다. |
+| `created_at` | 시간대 포함 시각 | 마지막 로그인 시각 |
+
+로그아웃하면 행이 지워집니다. 이 테이블은 `python -m app.init_db`(`create_all`)가 만들고, 이미 있는 DB에서 다시 실행하면 기존 테이블은 그대로 두고 이 테이블만 추가됩니다.
 
 ### `chat_logs`
 

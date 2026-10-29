@@ -18,7 +18,7 @@ from sqlalchemy import and_, func, literal, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 
-from .models import StarChunk, StarProfile
+from ..models import StarChunk, StarProfile
 
 logger = logging.getLogger("next_star_hunter")
 
@@ -362,6 +362,7 @@ def _star(row: dict, snippets: list, members: Optional[list[str]] = None) -> dic
     star = {k: row.get(k) for k in ("title", "kind", "group_name", "gender", "birth_year",
                                     "debut_year", "birthplace", "agency", "height_cm",
                                     "source_url")}
+    star["aliases"] = [a for a in (row.get("aliases") or "").split("\n") if a]
     star["snippets"] = [{"section": s, "text": _snippet(c, k)} for s, c, k in
                         snippets[:MAX_SNIPPETS]]
     if members:
@@ -538,8 +539,42 @@ def format_reference(result: StarSearchResult) -> str:
     return REF_OPEN + "\n" + body + "\n" + REF_CLOSE
 
 
-def source_line(result: StarSearchResult) -> str:
-    """Attribution appended to the answer by the server ('' when nothing was used)."""
+SOURCE_PREFIX = "출처:"
+
+
+def strip_trailing_source(text: str) -> str:
+    """Drop a trailing '출처: ...' line (and the blank lines before it) from an answer."""
+    lines = text.rstrip().split("\n")
+    if lines and lines[-1].lstrip().startswith(SOURCE_PREFIX):
+        lines.pop()
+        return "\n".join(lines).rstrip()
+    return text
+
+
+def remove_source_lines(text: str) -> str:
+    """Remove every line the model wrote starting with '출처:', and trailing blank lines."""
+    lines = [ln for ln in text.split("\n") if not ln.lstrip().startswith(SOURCE_PREFIX)]
+    return "\n".join(lines).rstrip()
+
+
+def _name_forms(star: dict) -> list[str]:
+    forms = [star["title"], *(star.get("aliases") or [])]
+    forms += [re.sub(r"\s*\([^)]*\)\s*$", "", f) for f in list(forms)]
+    return [f.strip() for f in forms if f and f.strip()]
+
+
+def source_line(result: StarSearchResult, answer: Optional[str] = None) -> str:
+    """Attribution appended to the answer by the server ('' when nothing was used).
+
+    With an answer, only stars named in it are listed (title, alias, or the title without
+    its parenthesized part); when none are named, every hit used as a reference is listed.
+    """
     if not result.stars:
         return ""
-    return "출처: 나무위키(CC BY-NC-SA 2.0 KR) - " + ", ".join(result.names)
+    names = result.names
+    if answer is not None:
+        shown = [s["title"] for s in result.stars
+                 if any(f in answer for f in _name_forms(s))]
+        names = shown or names
+    names = list(dict.fromkeys(names))
+    return "출처: 나무위키(CC BY-NC-SA 2.0 KR) - " + ", ".join(names)
