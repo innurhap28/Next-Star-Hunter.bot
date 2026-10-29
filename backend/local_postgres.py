@@ -11,11 +11,10 @@ All passwords, local data and logs stay in ignored backend/.env or backend/tmp/.
 """
 import argparse
 import json
-import os
-from pathlib import Path
 import secrets
 import subprocess
 import sys
+from pathlib import Path
 
 from dotenv import dotenv_values
 from sqlalchemy import URL
@@ -74,38 +73,45 @@ def write_local_env(state):
 
 def setup_database():
     if not (BIN / "initdb.exe").is_file():
-        raise SetupError("PostgreSQL Windows binaries are missing from backend/tmp/postgresql-runtime/pgsql/bin.")
+        raise SetupError("PostgreSQL Windows binaries are missing from "
+                         "backend/tmp/postgresql-runtime/pgsql/bin.")
     state = state_for_local_cluster()
     if not INIT_MARKER.exists():
         if DATA.exists():
-            raise SetupError("An incomplete local cluster exists. Preserve it and inspect the init log before retrying.")
+            raise SetupError("An incomplete local cluster exists. "
+                             "Preserve it and inspect the init log before retrying.")
         password_file = LOCAL / "local-postgres-init-password.txt"
         password_file.write_text(state["admin_password"] + "\n", encoding="utf-8")
         run_command([BIN / "initdb.exe", "-D", DATA, "-U", state["admin"],
-                     "--pwfile=" + str(password_file), "--auth=scram-sha-256", "--encoding=UTF8", "--no-locale"],
+                     "--pwfile=" + str(password_file), "--auth=scram-sha-256",
+                     "--encoding=UTF8", "--no-locale"],
                     LOCAL / "local-postgres-init.log")
         INIT_MARKER.write_text(json.dumps({"initialized": True}), encoding="utf-8")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     status = subprocess.run([str(BIN / "pg_ctl.exe"), "status", "-D", str(DATA)],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            creationflags=flags)
     if status.returncode:
         run_command([BIN / "pg_ctl.exe", "start", "-D", DATA, "-l", LOG, "-w", "-t", "30",
-                     "-o", "-h 127.0.0.1 -p " + str(state["port"])], LOCAL / "local-postgres-control.log")
+                     "-o", "-h 127.0.0.1 -p " + str(state["port"])],
+                    LOCAL / "local-postgres-control.log")
     import psycopg
     from psycopg import sql
     with psycopg.connect(host="127.0.0.1", port=state["port"], user=state["admin"],
-                         password=state["admin_password"], dbname="postgres", autocommit=True, connect_timeout=5) as conn:
+                         password=state["admin_password"], dbname="postgres",
+                         autocommit=True, connect_timeout=5) as conn:
         if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (state["user"],)).fetchone():
             conn.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
                 sql.Identifier(state["user"]), sql.Literal(state["password"])))
         for name in ["next_star_hunter_local", "next_star_hunter_test"]:
             if not conn.execute("SELECT 1 FROM pg_database WHERE datname=%s", (name,)).fetchone():
-                conn.execute(sql.SQL("CREATE DATABASE {} OWNER {}").format(sql.Identifier(name), sql.Identifier(state["user"])))
+                conn.execute(sql.SQL("CREATE DATABASE {} OWNER {}").format(
+                    sql.Identifier(name), sql.Identifier(state["user"])))
     write_local_env(state)
     # Credentials here belong only to this tool's local DB. Schema creation does
     # not consult a potentially unrelated root .env or operating-system DSN.
+    from app import models  # noqa: F401  # register metadata
     from app.database import Base, build_engine
-    from app import models
     local_url = dotenv_values(ENV_FILE)["DATABASE_URL"]
     engine = build_engine(local_url)
     try:
@@ -118,12 +124,14 @@ def setup_database():
 def stop_database():
     if not INIT_MARKER.exists():
         return
-    run_command([BIN / "pg_ctl.exe", "stop", "-D", DATA, "-m", "fast", "-w"], LOCAL / "local-postgres-control.log")
+    run_command([BIN / "pg_ctl.exe", "stop", "-D", DATA, "-m", "fast", "-w"],
+                LOCAL / "local-postgres-control.log")
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--serve", action="store_true", help="Start local Swagger after DB preparation")
+    parser.add_argument("--serve", action="store_true",
+                        help="Start local Swagger after DB preparation")
     parser.add_argument("--web-port", type=int, default=8001)
     parser.add_argument("--stop", action="store_true", help="Stop only this development DB cluster")
     args = parser.parse_args(argv)
@@ -133,7 +141,8 @@ def main(argv=None):
             print("Local development PostgreSQL stopped.")
             return 0
         state = setup_database()
-        print("Local PostgreSQL ready on 127.0.0.1:" + str(state["port"]) + ". users/chat_logs tables ready.", flush=True)
+        print("Local PostgreSQL ready on 127.0.0.1:" + str(state["port"])
+              + ". users/chat_logs tables ready.", flush=True)
         if args.serve:
             # Explicitly use this development configuration for this process only.
             from dotenv import load_dotenv
@@ -145,7 +154,8 @@ def main(argv=None):
     except SetupError as error:
         print(str(error), file=sys.stderr)
     except Exception as error:
-        print("Local PostgreSQL setup failed (" + type(error).__name__ + "). Check backend/tmp/ logs; do not publish credentials.", file=sys.stderr)
+        print("Local PostgreSQL setup failed (" + type(error).__name__
+              + "). Check backend/tmp/ logs; do not publish credentials.", file=sys.stderr)
     return 1
 
 

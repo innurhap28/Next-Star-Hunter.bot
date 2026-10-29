@@ -1,11 +1,13 @@
 """Local setup must never overwrite another database's credentials or data."""
-from pathlib import Path
 import importlib.util
+from pathlib import Path
+
 import pytest
 from dotenv import dotenv_values
 from sqlalchemy import make_url
 
-spec = importlib.util.spec_from_file_location("local_postgres", Path(__file__).resolve().parents[2] / "backend" / "local_postgres.py")
+LOCAL_POSTGRES = Path(__file__).resolve().parents[2] / "backend" / "local_postgres.py"
+spec = importlib.util.spec_from_file_location("local_postgres", LOCAL_POSTGRES)
 local = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(local)
 

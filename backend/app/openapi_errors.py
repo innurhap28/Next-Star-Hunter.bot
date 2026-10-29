@@ -52,7 +52,8 @@ SERVICE_ERROR = error_response(
             "error": "DB_NOT_CONFIGURED", "message": "서버 DB 설정을 확인해주세요.",
         }),
         ("db_unavailable", "DB 연결 또는 작업 실패", {
-            "error": "DB_UNAVAILABLE", "message": "현재 DB 요청을 처리할 수 없습니다. 잠시 후 다시 시도해주세요.",
+            "error": "DB_UNAVAILABLE",
+            "message": "현재 DB 요청을 처리할 수 없습니다. 잠시 후 다시 시도해주세요.",
         }),
     ],
 )
@@ -78,9 +79,11 @@ REGISTER_ERRORS = {
     503: SERVICE_ERROR,
 }
 LOGIN_ERRORS = {
-    401: error_response("이메일 또는 비밀번호가 올바르지 않습니다.", [("invalid_credentials", "로그인 실패", {
-        "error": "INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호를 확인해주세요.",
-    })]),
+    401: error_response("이메일 또는 비밀번호가 올바르지 않습니다.", [
+        ("invalid_credentials", "로그인 실패", {
+            "error": "INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호를 확인해주세요.",
+        }),
+    ]),
     403: ORIGIN_ERROR,
     422: VALIDATION_ERROR,
     503: SERVICE_ERROR,

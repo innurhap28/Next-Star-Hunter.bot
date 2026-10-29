@@ -1,11 +1,13 @@
 """Verify Swagger examples against actual account error responses."""
 import json
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from app.config import Settings
 from app.database import Base
 from app.main import create_app
@@ -27,7 +29,8 @@ def settings(**changes):
 
 @pytest.fixture
 def api():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
     with TestClient(create_app(settings(), factory), base_url="https://testserver") as client:
@@ -76,7 +79,8 @@ def test_documented_statuses_and_examples_validate(api, path, method, codes):
         model = ValidationErrorResponse if code == "422" else ErrorResponse
         for example in content["examples"].values():
             model.model_validate(example["value"])
-            assert not ({"detail", "input", "ctx", "password", "password_hash"} & example["value"].keys())
+            forbidden = {"detail", "input", "ctx", "password", "password_hash"}
+            assert not (forbidden & example["value"].keys())
 
 
 @pytest.mark.parametrize("path", ["/api/auth/register", "/api/auth/login"])
@@ -134,11 +138,18 @@ def test_origin_failure_matches_swagger(api, path):
 
 
 @pytest.mark.parametrize("path,method", OPERATIONS)
-@pytest.mark.parametrize("configured,example", [(False,"auth_not_configured"),(True,"db_not_configured")])
+@pytest.mark.parametrize("configured,example",
+                         [(False, "auth_not_configured"), (True, "db_not_configured")])
 def test_configuration_errors_match_swagger(path, method, configured, example):
-    config = settings(DATABASE_URL="sqlite://") if configured else settings(SECRET_KEY="", DATABASE_URL="")
+    if configured:
+        config = settings(DATABASE_URL="sqlite://")
+    else:
+        config = settings(SECRET_KEY="", DATABASE_URL="")
     with TestClient(create_app(config), base_url="https://testserver") as client:
-        response = client.request(method, path, json=ACCOUNT) if method == "post" else client.get(path)
+        if method == "post":
+            response = client.request(method, path, json=ACCOUNT)
+        else:
+            response = client.get(path)
         check_error(client, path, method, response, 503, example)
 
 

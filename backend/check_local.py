@@ -4,7 +4,9 @@ Run from the repository root: python backend/check_local.py
 Create tables separately: PYTHONPATH=backend python -m app.init_db
 """
 import json
+
 from sqlalchemy import inspect, text
+
 from app.config import Settings
 from app.database import build_engine
 
