@@ -1,0 +1,87 @@
+name: 이슈 라벨 자동화
+
+# 입력이 이상하거나 폼이 아니면 아무것도 바꾸지 않고 끝낸다.
+# 이미 반영된 경우(404, 422)는 넘어가고, 권한이나 서버 오류는 실패로 남긴다.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    # 본문을 연달아 고치면 run이 병렬로 돌아 라벨이 서로를 덮어쓴다 → 이슈 단위로 직렬화.
+    concurrency:
+      group: issue-labels-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const AREAS = ['backend', 'frontend', 'docs', 'infra', 'db'];
+            const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
+
+            const issue = context.payload.issue || {};
+            if (issue.pull_request) {
+              core.info('PR 이벤트 - 이 워크플로는 이슈만 담당한다');
+              return;
+            }
+
+            const lines = (issue.body || '').split(/\r?\n/);
+            // 폼을 거치지 않은 이슈(자유 형식ㆍ빈 본문)에서는 사람이 붙인 라벨을 건드리지 않는다.
+            const hasForm = lines.some((line) => ['### 분야', '### 우선순위'].includes(line.trim()));
+            if (!hasForm) {
+              core.info('폼 헤딩 없음 - 변경 없음');
+              return;
+            }
+
+            function valueAfter(heading) {
+              const start = lines.findIndex((line) => line.trim() === `### ${heading}`);
+              if (start === -1) return '';
+              for (let i = start + 1; i < lines.length; i += 1) {
+                const text = lines[i].trim();
+                if (text === '') continue;
+                if (text.startsWith('### ')) return '';
+                return text;
+              }
+              return '';
+            }
+
+            const desired = [];
+            const area = valueAfter('분야');
+            if (AREAS.includes(area)) desired.push(`area: ${area}`);
+            const priority = valueAfter('우선순위');
+            if (PRIORITIES.includes(priority)) desired.push(`priority: ${priority}`);
+
+            const current = (issue.labels || [])
+              .map((label) => (typeof label === 'string' ? label : label && label.name))
+              .filter(Boolean);
+            const managed = current.filter((name) => name.startsWith('area: ') || name.startsWith('priority: '));
+
+            async function safely(action) {
+              try {
+                await action();
+              } catch (error) {
+                const status = error && error.status;
+                if (status === 404 || status === 422) {
+                  core.info(`이미 반영됨(${status}) - 계속`);
+                  return;
+                }
+                core.warning(`라벨 갱신 실패(${status || '?'}): ${error.message}`);
+                core.setFailed(`라벨 갱신 실패: ${error.message}`);
+              }
+            }
+
+            for (const name of managed) {
+              if (!desired.includes(name)) {
+                await safely(() => github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name }));
+              }
+            }
+            for (const name of desired) {
+              if (!current.includes(name)) {
+                await safely(() => github.rest.issues.addLabels({ ...context.repo, issue_number: issue.number, labels: [name] }));
+              }
+            }

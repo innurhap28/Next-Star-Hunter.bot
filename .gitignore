@@ -18,6 +18,9 @@ __pycache__/
 *.sqlite*
 .sqlite-snapshot-*.tmp
 
+# 나무위키 덤프와 추출 결과 (라이선스상 저장소에 올리지 않음)
+data/namu/
+
 # 로컬 검증 산출물
 tmp/
 output/
@@ -30,7 +33,7 @@ pytest-cache-files-*/
 .idea/
 .vscode/
 
-# 개인 에이전트 파일
+# 개인 작업 메모
 docs/PROGRESS.md
 
 # 개인 설정 스크립트
