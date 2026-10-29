@@ -12,6 +12,18 @@ local = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(local)
 
 
+def isolate(tmp_path, monkeypatch):
+    """Point every generated file at tmp_path instead of the real backend/tmp."""
+    local_dir = tmp_path / "tmp"
+    monkeypatch.setattr(local, "LOCAL", local_dir)
+    monkeypatch.setattr(local, "DATA", local_dir / "local-postgres-data")
+    monkeypatch.setattr(local, "STATE", local_dir / "local-postgres-private.json")
+    monkeypatch.setattr(local, "INIT_MARKER", local_dir / "local-postgres-initialized.json")
+    monkeypatch.setattr(local, "LOG", local_dir / "local-postgres.log")
+    monkeypatch.setattr(local, "ENV_FILE", tmp_path / ".env")
+    return local_dir
+
+
 def state():
     return {"user":"test-user", "password":"test-password", "port":55432,
             "signing_key":"test-signing-key-at-least-32-characters"}
@@ -39,6 +51,7 @@ def test_setup_does_not_overwrite_another_db_config(tmp_path, monkeypatch):
 
 
 def test_missing_runtime_does_not_create_credentials(tmp_path, monkeypatch):
+    isolate(tmp_path, monkeypatch)
     monkeypatch.setattr(local, "BIN", tmp_path / "no-binaries")
     with pytest.raises(local.SetupError, match="binaries are missing"):
         local.setup_database()
