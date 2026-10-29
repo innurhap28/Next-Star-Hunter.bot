@@ -1,0 +1,38 @@
+name: 배포 스모크 검사
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 배포 URL 설정 확인
+        id: url
+        run: |
+          if [ -z "${{ vars.DEPLOY_URL }}" ]; then
+            echo "set=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_URL 변수가 없어 스모크 검사를 건너뜁니다."
+          else
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: /health 응답 확인
+        if: steps.url.outputs.set == 'true'
+        run: |
+          url="https://${{ vars.DEPLOY_URL }}/health"
+          for attempt in 1 2 3; do
+            body=$(curl -fsS --max-time 10 "$url" || true)
+            echo "attempt ${attempt}: ${body}"
+            case "$body" in
+              *'"status":"ok"'*) echo "healthy: ${url}"; exit 0 ;;
+            esac
+            sleep 5
+          done
+          echo "::error::/health 스모크 실패: ${url}"
+          exit 1
