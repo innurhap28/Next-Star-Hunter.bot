@@ -43,37 +43,114 @@
 | 배포 | Railway | GitHub `main` 병합만으로 자동 배포되고 PostgreSQL 플러그인을 바로 붙일 수 있습니다. | 사용량에 따라 비용이 나와서 계속 켜 두려면 사용량을 챙겨야 합니다. |
 | CI | GitHub Actions | PR마다 `ruff check .`와 `pytest -q`를 돌려 병합 조건으로 씁니다. | 실제 PostgreSQL·AI를 쓰는 테스트는 CI에서 건너뜁니다. |
 
-## 시스템 구조
+## 4. 시스템 구조
+
+```mermaid
+flowchart LR
+    B["브라우저<br/>Jinja2 화면 + JS"] --> M["미들웨어<br/>세션 쿠키 · 요청 ID · 출처 검사 · 요청 로그"]
+    subgraph S["FastAPI 서버"]
+        M --> P["routers/pages.py<br/>/ , /auth"]
+        M --> A["routers/auth.py<br/>/api/auth/* , /api/me"]
+        M --> C["routers/chat.py<br/>/api/chat , /api/me/chats"]
+        P --> D["dependencies.py<br/>get_db · get_current_user"]
+        A --> D
+        C --> D
+        D --> R["crud/<br/>users · sessions · chat_logs"]
+        A --> R
+        C --> R
+        C --> SS["star_search.py<br/>스타 자료 검색"]
+        C --> AI["ai_client.py<br/>시간 제한 · 오류 변환"]
+    end
+    R --> DB[("PostgreSQL")]
+    SS --> DB
+    AI -->|"httpx, 서버에만 있는 키"| COPA["copa AI API<br/>claude-sonnet-4"]
+```
+
+라우터는 요청 검증과 HTTP 응답만 맡고, 로그인 확인은 `dependencies.py`의 공통 의존성으로, 쿼리와 저장은 `crud/` 함수로 분리했습니다. 자세한 질문 처리 흐름은 [아키텍처 문서](docs/ARCHITECTURE.md)에 있습니다.
 
 ```text
-브라우저 ──> FastAPI 웹 화면 / API ──> 인증 및 입력 검증
-                         ├──> AI API (서버 측 호출, 제한 시간 적용)
-                         └──> PostgreSQL (사용자 및 대화 로그)
+.
+├── backend/
+│   ├── app/
+│   │   ├── main.py            # 앱 생성, 미들웨어, 공통 오류 처리, 라우터 등록
+│   │   ├── config.py          # 환경 변수 설정 (Settings)
+│   │   ├── database.py        # DB 엔진·세션 생성
+│   │   ├── models.py          # SQLAlchemy 테이블
+│   │   ├── schemas.py         # 요청·응답 Pydantic 스키마
+│   │   ├── dependencies.py    # get_db, get_current_user (인증 공통 의존성)
+│   │   ├── security.py        # 비밀번호 해시·검증
+│   │   ├── routers/           # auth.py(계정), chat.py(채팅·기록), pages.py(화면)
+│   │   ├── crud/              # DB 접근 함수: users.py, sessions.py, chat_logs.py
+│   │   ├── ai_client.py       # AI API 호출, 시간 제한·실패 처리
+│   │   ├── star_search.py     # 스타 자료 검색과 참고 자료 구성
+│   │   ├── openapi_errors.py  # Swagger 오류 응답 예시
+│   │   └── init_db.py         # 테이블 생성 명령
+│   ├── check_local.py         # 로컬 설정·DB 연결 점검
+│   └── local_postgres.py      # 로컬 개발용 PostgreSQL 준비
+├── frontend/
+│   ├── templates/             # auth.html(로그인·회원가입), chat.html(채팅)
+│   └── static/                # css/, js/ (/static 경로로 제공)
+├── scripts/
+│   ├── namuwiki/              # 나무위키 덤프 추출·정제·청킹·DB 적재
+│   └── check_logs.sql         # 대화 로그 확인용 SQL
+├── tests/                     # backend/, namuwiki/ 테스트
+├── docs/                      # API·DB·아키텍처·배포·데이터·협업 문서
+└── .github/                   # CI, 라벨 자동화, 이슈 폼, PR 템플릿
 ```
 
-FastAPI는 화면, 인증, 질문 요청을 처리합니다. 질문을 받은 뒤 같은 사용자의 최근 대화를 문맥으로 구성해 AI API를 호출하고, 질문·응답·사용자·생성 시각을 PostgreSQL에 저장합니다. AI 호출 실패나 시간 초과는 서비스 프로세스를 종료시키지 않고 사용자 안내와 로그로 처리합니다.
+## 5. DB 구조 (ERD)
 
-## 데이터 및 대화 기록
-
-대화 로그에는 최소한 다음 정보가 포함됩니다.
-
-- 사용자 식별자
-- 생성 시각
-- 사용자 질문
-- AI 응답
-
-스타 프로필과 시각적 취향 태그는 다음과 같은 개념 구조로 관리할 계획입니다. 실제 스키마는 구현에 맞춰 [데이터베이스 문서](docs/DATABASE.md)에 기록합니다.
-
-```json
-{
-  "name": "스타 이름",
-  "group": "그룹 또는 솔로",
-  "category": "아이돌",
-  "profile": {"gender": "정보 확인 필요", "birthplace": "정보 확인 필요"},
-  "visual_tags": ["안경", "곱슬머리"],
-  "source_url": "자료 출처"
-}
+```mermaid
+erDiagram
+    users ||--o{ chat_logs : "작성"
+    users ||--o| user_sessions : "현재 로그인"
+    star_profiles ||--o{ star_chunks : "문단"
+    users {
+        integer id PK
+        varchar email UK "최대 254자"
+        varchar password_hash "해시만 저장"
+        timestamptz created_at
+    }
+    user_sessions {
+        integer user_id PK, FK "users.id, 삭제 시 함께 삭제"
+        varchar session_hash "세션 ID의 SHA-256"
+        timestamptz created_at "마지막 로그인 시각"
+    }
+    chat_logs {
+        integer id PK
+        integer user_id FK "users.id"
+        text question
+        text answer "출처 줄 포함"
+        timestamptz created_at
+    }
+    star_profiles {
+        integer id PK
+        text title UK
+        varchar kind "person 또는 group"
+        text group_name
+        varchar gender "M 또는 F"
+        smallint birth_year
+        smallint debut_year
+        text birthplace
+        text agency
+        float height_cm
+        text aliases "한 줄에 하나"
+        text source_url
+        timestamptz updated_at
+    }
+    star_chunks {
+        integer id PK
+        integer profile_id FK "star_profiles.id"
+        text section
+        integer chunk_index "profile_id와 함께 유일"
+        text content
+        text source_url
+    }
 ```
+
+- `chat_logs`는 `(user_id, created_at, id)` 인덱스로 사용자별 최근 기록을 찾습니다.
+- `star_profiles`, `star_chunks`는 사용자 데이터와 연결하지 않고, 앱이 아니라 적재 스크립트(`python -m scripts.namuwiki.load`)가 채웁니다.
+- 필드 설명은 [데이터베이스 문서](docs/DATABASE.md)에 있습니다.
 
 ## API 및 로그 확인
 
