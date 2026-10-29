@@ -414,6 +414,8 @@ Railway가 `main` 브랜치를 자동 배포하고 같은 프로젝트의 Postgr
 - 김시현: 저장소와 FastAPI 초기 구성(`/health`), 로그인·회원가입·채팅 화면(#5), 페이지 라우트와 `/static` 연결(#28), 채팅 화면을 채팅·대화 기록 API에 연결하고 오류 코드 안내(#32), 다른 곳 로그인 안내 표시(#43), 나무위키 덤프 스트리밍 리더와 스타 문서 추출 CLI(#31), CI(`lint`, `test`)와 ruff·pytest 설정, PR 템플릿, 라벨·머지 규칙 문서(#12), 린트 정리와 테스트 폴더 통합(#36), Railway 배포 런북과 배포 후 스모크 검사(#14), README와 API·아키텍처·DB·협업 문서(#1, #17), 화면 캡처
 - 황승재: PostgreSQL 연결, 사용자·대화 모델, 회원가입·로그인 API(#4), Swagger 응답 예시와 오류 명세, 로컬 PostgreSQL 준비(#6, #8, #23), 비밀번호 해시 호환(#18), AI 설정(#19), AI 호출 모듈과 `POST /api/chat`(#29), `GET /api/me/chats`와 `check_logs.sql`(#30), 나무마크 정제·청킹·스타 테이블 적재(#33), 채팅 스타 검색과 출처 표시(#35), crud 계층 분리(#41), 계정당 세션 하나와 `user_sessions`(#42), services·schemas 계층 분리와 파일 로그(#45), 출처 줄 정리(#46), 이슈 폼과 라벨 자동화(#12), Railway 프로젝트 구성과 배포
 
+영역별로 나눈 표는 [docs/CONTRIBUTORS.md](docs/CONTRIBUTORS.md)에 있습니다.
+
 ## 브랜치 전략
 
 - `main`: 배포 브랜치. Railway가 이 브랜치를 자동 배포하며, `develop`에서 릴리스 PR로만 반영합니다.
