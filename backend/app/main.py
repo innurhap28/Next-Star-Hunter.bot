@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings
-from .routers import auth, chat, pages
+from .routers import auth, chat, logs, pages
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("next_star_hunter")
@@ -116,6 +116,7 @@ def create_app(settings=None, session_factory=None, ai_transport=None):
     app.mount("/static", StaticFiles(directory=str(pages.STATIC_DIR)), name="static")
     app.include_router(auth.router)
     app.include_router(chat.router)
+    app.include_router(logs.router)
     app.include_router(pages.router)
     return app
 
