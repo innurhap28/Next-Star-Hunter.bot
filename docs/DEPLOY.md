@@ -41,12 +41,9 @@ Variables 탭에서 **이름만** 만들고 값은 팀이 직접 입력합니다
 | `LLM_MODEL` | 기본값 `claude-sonnet-4`. 바꿀 때는 `claude-haiku-4`만 가능 |
 | `LLM_TIMEOUT_SECONDS` | AI API 호출 제한 시간(초) |
 | `LLM_MAX_COMPLETION_TOKENS` | 응답 최대 토큰 수 |
-| `LLM_JSON_MODE` | JSON 응답 모드 사용 여부(`openai` 방식에서만 적용) |
-| `CHAT_TOTAL_TIMEOUT_SECONDS` | 채팅 요청 전체 제한 시간(초) |
-| `KNOWLEDGE_USAGE_SCOPE` | 자료 사용 범위(`educational_noncommercial` / `commercial`) |
 | `SESSION_HTTPS_ONLY` | 운영이므로 `true` |
 | `ENABLE_API_DOCS` | 운영이므로 `false` (`/docs`·`/openapi.json` 비노출) |
-| `LOG_FILE_PATH` | 선택. 영속 볼륨을 쓸 때만 경로를 넣는다 |
+| `LOG_FILE_PATH` | 선택. 영속 볼륨을 쓸 때만 경로를 넣는다(예: `/data/logs/app.log`). 콘솔 로그와 같은 형식으로 파일에도 남고, 열 수 없으면 경고만 남긴다 |
 | `PORT` | 입력하지 않는다 — Railway가 런타임에 자동 주입 |
 
 `DATABASE_URL` 스킴은 손대지 않아도 됩니다. `backend/app/database.py`의 `build_engine()`이
