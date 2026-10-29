@@ -51,7 +51,8 @@ def create_app(settings=None, session_factory=None):
             bad_origin = parsed is not None and (parsed.scheme not in {"http", "https"} or parsed.netloc != request.headers.get("host"))
         except ValueError:
             bad_origin = True
-        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and bad_origin:
+        #if request.method in {"POST", "PUT", "PATCH", "DELETE"} and bad_origin:
+        if request.method in {"PUT", "PATCH", "DELETE"} and bad_origin:
             response = JSONResponse({"error": "ORIGIN_NOT_ALLOWED", "message": "허용되지 않은 요청 출처입니다."}, 403)
         else:
             response = await call_next(request)
