@@ -22,9 +22,10 @@ class Settings(BaseSettings):
 
     # AI API. 키가 없어도 서버는 뜨고, 채팅 기능만 llm_configured()로 막는다.
     LLM_API_KEY: SecretStr = SecretStr("")
-    LLM_BASE_URL: str = ""
+    # 수업에서 쓰는 copa(Anthropic 방식) 기준. 모델은 sonnet 고정, haiku 만 예비로 허용.
+    LLM_BASE_URL: str = "https://copa.codyssey.kr/v1"
     LLM_API_STYLE: Literal["anthropic", "openai"] = "anthropic"
-    LLM_MODEL: str = ""
+    LLM_MODEL: Literal["claude-sonnet-4", "claude-haiku-4"] = "claude-sonnet-4"
     LLM_TIMEOUT_SECONDS: float = Field(default=90, gt=0)
     LLM_MAX_COMPLETION_TOKENS: int = Field(default=8000, gt=0)
     LLM_JSON_MODE: bool = False
