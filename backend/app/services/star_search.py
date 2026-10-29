@@ -538,6 +538,18 @@ def format_reference(result: StarSearchResult) -> str:
     return REF_OPEN + "\n" + body + "\n" + REF_CLOSE
 
 
+SOURCE_PREFIX = "출처:"
+
+
+def strip_trailing_source(text: str) -> str:
+    """Drop a trailing '출처: ...' line (and the blank lines before it) from an answer."""
+    lines = text.rstrip().split("\n")
+    if lines and lines[-1].lstrip().startswith(SOURCE_PREFIX):
+        lines.pop()
+        return "\n".join(lines).rstrip()
+    return text
+
+
 def source_line(result: StarSearchResult) -> str:
     """Attribution appended to the answer by the server ('' when nothing was used)."""
     if not result.stars:

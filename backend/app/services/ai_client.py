@@ -1,6 +1,8 @@
 """Server-side AI API calls. The API key never leaves this module."""
 import httpx
 
+from .star_search import strip_trailing_source
+
 SYSTEM_PROMPT = (
     "너는 'Next Star Hunter'의 친절한 캐스팅 매니저야. "
     "사용자가 말한 취향(분위기, 외모, 장르, 출신, 데뷔 시기 등)에 맞는 "
@@ -48,7 +50,7 @@ def build_messages(history, question):
     messages = []
     for item in history:
         messages.append({"role": "user", "content": item.question})
-        messages.append({"role": "assistant", "content": item.answer})
+        messages.append({"role": "assistant", "content": strip_trailing_source(item.answer)})
     messages.append({"role": "user", "content": question})
     return messages
 
