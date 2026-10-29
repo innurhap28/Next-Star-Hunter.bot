@@ -5,6 +5,7 @@
   const welcome = document.querySelector("[data-welcome]");
   const sidebar = document.querySelector(".sidebar");
   const userLabel = document.querySelector("[data-user-label]");
+  const userAvatar = document.querySelector("[data-user-avatar]");
   const loginLink = document.querySelector("[data-login-link]");
   const logoutButton = document.querySelector("[data-logout-button]");
 
@@ -35,7 +36,9 @@
         headers: { Accept: "application/json" },
       });
       const user = await readResponse(response);
-      if (userLabel) userLabel.textContent = user.email.split("@")[0];
+      const name = user.email.split("@")[0];
+      if (userLabel) userLabel.textContent = name;
+      if (userAvatar) userAvatar.textContent = name.charAt(0).toUpperCase();
       if (loginLink) loginLink.hidden = true;
       if (logoutButton) logoutButton.hidden = false;
     } catch (error) {
