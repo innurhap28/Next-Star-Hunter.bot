@@ -4,15 +4,15 @@
 
 | 구성원 | 담당 영역 | 작업 요약 |
 | --- | --- | --- |
-| 김시현(팀장) | 기획, 프론트엔드, 초기 FastAPI 구성, 문서·CI | 서비스 기획 및 화면 흐름 정리, 초기 FastAPI 앱과 `/health` 구성, API·아키텍처·DB·협업 규칙 문서 작성, CI(lint·test)와 테스트·ruff 설정, PR 템플릿, Railway 배포 런북, 채팅 화면 `frontend/` (PR #5 리뷰 중) |
-| 황승재 | 백엔드, 배포 | PostgreSQL 연결과 users·chat_logs 모델, 비밀번호 해시와 회원가입·로그인·로그아웃·내 정보 API, 이슈 폼과 라벨 자동화, Swagger 오류 명세와 로컬 PostgreSQL 준비 (PR #8 리뷰 중), Swagger health 증빙 (PR #6 리뷰 중), 비밀번호 해시 호환 (PR #18 리뷰 중) |
+| 김시현(팀장) | 기획, 프론트엔드, 초기 FastAPI 구성, 문서·CI | 서비스 기획 및 화면 흐름 정리, 초기 FastAPI 앱과 `/health` 구성, API·아키텍처·DB·협업 규칙 문서 작성, CI(lint·test)와 테스트·ruff 설정, PR 템플릿, Railway 배포 런북, 로그인·회원가입과 채팅 화면 `frontend/` (PR #5) |
+| 황승재 | 백엔드, 배포 | PostgreSQL 연결과 users·chat_logs 모델, 비밀번호 해시와 회원가입·로그인·로그아웃·내 정보 API, 이슈 폼과 라벨 자동화, Swagger 오류 명세와 로컬 PostgreSQL 준비 (PR #8), Swagger health 증빙 (PR #6 리뷰 중), 비밀번호 해시 호환 (PR #18) |
 
 ## 작업 요약 체크리스트
 
 ### 팀장
 
 - [x] 기획 및 화면 흐름 정리
-- [ ] 프론트엔드 화면 구현 (PR #5 리뷰 중)
+- [x] 프론트엔드 화면 구현 (채팅 API 연결과 대화 기록 화면은 아직 없음)
 - [x] 초기 FastAPI 구성
 - [x] 문서 작업에 참여하고 docs 브랜치에서 팀 문서 통합
 
