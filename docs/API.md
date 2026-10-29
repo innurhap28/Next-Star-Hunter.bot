@@ -128,7 +128,7 @@ AI API 호출은 서버에서만 하고, 키는 응답이나 로그에 넣지 �
 
 #### 스타 자료 검색
 
-AI 를 부르기 전에 질문으로 `star_profiles`, `star_chunks` 를 검색합니다(`backend/app/star_search.py`). 규칙 기반이고 AI 를 쓰지 않습니다.
+AI 를 부르기 전에 질문으로 `star_profiles`, `star_chunks` 를 검색합니다(`backend/app/services/star_search.py`). 규칙 기반이고 AI 를 쓰지 않습니다.
 
 | 질문 속 표현 | 조건 |
 | --- | --- |
