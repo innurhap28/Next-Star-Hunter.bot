@@ -47,3 +47,11 @@ def test_readiness_hides_connection_details(monkeypatch):
     result = check_module.check_local(settings)
     assert result == {"ready": False, "error": "DB_UNAVAILABLE", "error_type": "RuntimeError"}
     assert secret not in str(result)
+
+
+def test_readiness_reports_invalid_database_url_like_api():
+    settings = Settings(_env_file=None, SECRET_KEY="test-signing-secret-at-least-32-characters",
+                        DATABASE_URL="sqlite:///private-local-path.db")
+    result = check_module.check_local(settings)
+    assert result == {"ready": False, "error": "DB_NOT_CONFIGURED", "error_type": "ValueError"}
+    assert "private-local-path" not in str(result)

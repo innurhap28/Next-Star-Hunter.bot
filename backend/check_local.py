@@ -33,7 +33,10 @@ def check_local(settings=None):
         return {"ready": True, "database": "PostgreSQL", "tables": tables}
     except Exception as error:
         # Exception messages may contain connection strings or credentials.
-        return {"ready": False, "error": "DB_UNAVAILABLE", "error_type": type(error).__name__}
+        # build_engine rejects non-PostgreSQL URLs, which the API reports as DB_NOT_CONFIGURED.
+        invalid_url = engine is None and isinstance(error, ValueError)
+        code = "DB_NOT_CONFIGURED" if invalid_url else "DB_UNAVAILABLE"
+        return {"ready": False, "error": code, "error_type": type(error).__name__}
     finally:
         if engine is not None:
             engine.dispose()
