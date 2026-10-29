@@ -30,6 +30,24 @@
 
   const explainNetworkError = () => "서버에 연결할 수 없습니다. FastAPI 서버에서 같은 주소로 페이지를 열었는지 확인해 주세요.";
 
+  const redirectIfAlreadyLoggedIn = async () => {
+    try {
+      const response = await fetch("/api/me", {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      await readResponse(response);
+      window.location.replace("/");
+    } catch (error) {
+      if (error.status !== 401) {
+        // Static previews and an unconfigured backend can still show the auth form.
+        console.info("Could not check the current session.", error.message);
+      }
+    }
+  };
+
+  redirectIfAlreadyLoggedIn();
+
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       selectTab(tab.dataset.authTab);
