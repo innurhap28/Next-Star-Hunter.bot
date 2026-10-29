@@ -1,0 +1,93 @@
+name: 작업 이슈
+description: 기능·개선·버그 작업을 등록합니다. 분야와 우선순위를 고르면 라벨이 자동으로 붙습니다.
+title: "[작업] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        분야와 우선순위를 고르면 `area:*`, `priority:*` 라벨이 자동으로 붙습니다.
+        나중에 이 내용을 고치면 라벨도 함께 갱신됩니다.
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 작업 배경 및 목적
+      description: 이 작업을 왜 해야 하는지, 어떤 문제를 해결하는지 적습니다.
+      placeholder: "예: Python 3.9 미만 환경을 지원하여 더 많은 사용자가 패키지를 설치할 수 있도록 범위를 확장합니다."
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: 주요 요구사항 (기능 정의)
+      description: 구체적으로 어떤 기능이 구현되어야 하는지 항목으로 적습니다.
+      value: |
+        - [ ] 
+        - [ ] 
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 분야
+      description: 이 작업이 주로 건드리는 영역입니다.
+      options:
+        - backend
+        - frontend
+        - docs
+        - infra
+        - db
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      description: P0(긴급) ~ P3(낮음). 확신이 없으면 P2.
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+      default: 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: changes
+    attributes:
+      label: 변경/추가될 항목 (예상)
+      description: 영향도를 파악하기 위해 수정이 예상되는 부분을 미리 적습니다.
+      value: |
+        지원 범위:
+        대상 파일:
+        영향을 받는 기능:
+    validations:
+      required: false
+
+  - type: textarea
+    id: screen_api
+    attributes:
+      label: 화면/API 변경 (해당하는 경우)
+      description: 기획서, 피그마 링크 또는 예상되는 UI/API 변경 스펙을 적습니다.
+    validations:
+      required: false
+
+  - type: textarea
+    id: infra_docs
+    attributes:
+      label: 설정·DB·문서 영향 (해당하는 경우)
+      description: 추가될 환경 변수, DB 스키마 변경 계획, 공식 문서 수정 필요 여부를 적습니다.
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 참고 자료
+      description: 관련 외부 링크, 기존 이슈, 참고할 만한 아티클을 적습니다.
+    validations:
+      required: false
