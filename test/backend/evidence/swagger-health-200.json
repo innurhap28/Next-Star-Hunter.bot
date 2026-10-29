@@ -21,7 +21,7 @@
     "height": 545
   },
   "image_sha256": "aef979138b33316b02ac2147d85647c323ae27dbfde3d8efac1af9349d01c987",
-  "image_source": "사용자가 제공한 원본 캡처를 편집 없이 복사",
+  "image_source": "Swagger 화면 원본 캡처, 편집 없음",
   "verification_scope": "Swagger에서 /health를 실행해 정상 HTTP 응답을 확인한 기록입니다. 자동 테스트 또는 전체 서비스 검증의 완료를 의미하지 않습니다.",
   "not_verified_by_this_capture": [
     "실제 PostgreSQL 연결",
