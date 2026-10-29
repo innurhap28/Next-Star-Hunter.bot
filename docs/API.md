@@ -46,11 +46,14 @@
 
 | 상황 | 상태 코드 | `error` |
 | --- | --- | --- |
+| 입력 형식 오류(이메일 형식, 비밀번호 길이) | 422 | `VALIDATION_ERROR` |
 | 이미 가입된 이메일 | 409 | `EMAIL_EXISTS` |
 | 이메일 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
 | 로그인하지 않고 `logout`·`me` 호출 | 401 | `LOGIN_REQUIRED` |
+| 허용되지 않은 출처에서 요청 | 403 | `ORIGIN_NOT_ALLOWED` |
 | 서버 인증 설정 누락 | 503 | `AUTH_NOT_CONFIGURED` |
 | 서버 DB 설정 오류 | 503 | `DB_NOT_CONFIGURED` |
+| DB 요청 처리 실패 | 503 | `DB_UNAVAILABLE` |
 
 ## 채팅 및 기록
 
