@@ -1,219 +1,340 @@
-# API 설계 및 구현 체크리스트
+# API 명세
 
-아래 경로와 형식은 팀의 초기 구현 계획입니다. 기능을 구현할 때 이 문서에서 체크리스트를 갱신하고, 실제 요청·응답이 달라지면 예시도 함께 수정합니다. 대화 기능은 로그인한 사용자만 사용할 수 있어야 합니다.
+엔드포인트별 요청·응답 예시와 오류를 정리합니다. 요청·응답 스키마는 Swagger UI(https://next-star-hunter-production.up.railway.app/docs)에서도 볼 수 있습니다. Swagger UI와 `/openapi.json`은 `ENABLE_API_DOCS=true`일 때만 열립니다.
 
-## 시스템 상태 확인
+- 요청과 응답 본문은 JSON입니다. 시각은 UTC 기준 ISO 8601 문자열입니다.
+- 로그인하면 `next_star_session` 쿠키(HttpOnly, SameSite=Lax, 8시간, 운영은 Secure)가 발급되고, 로그인이 필요한 API는 이 쿠키로 사용자를 확인합니다.
+- 모든 응답에 `X-Request-ID`(요청 ID)와 `Cache-Control: no-store` 헤더가 붙습니다. 요청에 UUID 형식의 `X-Request-ID`를 보내면 그 값을 그대로 씁니다.
+- 브라우저가 보낸 `POST` 요청의 `Origin`이 서버 주소와 다르면 처리하지 않고 `403 ORIGIN_NOT_ALLOWED`로 응답합니다. `Origin` 헤더가 없는 요청(curl 등)은 그대로 처리합니다.
 
-- [x] `GET /health`: 서비스 상태 확인 (현재 초기 앱에 구현)
+| 메서드 | 경로 | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/health` | 없음 | 서버 상태 확인 |
+| GET | `/` | 로그인 (아니면 `/auth`로 이동) | 채팅 화면 (HTML) |
+| GET | `/auth` | 없음 | 로그인·회원가입 화면 (HTML) |
+| POST | `/api/auth/register` | 없음 | 회원가입 |
+| POST | `/api/auth/login` | 없음 | 로그인, 쿠키 발급, 이전 세션 교체 |
+| POST | `/api/auth/logout` | 로그인 | 로그아웃, 쿠키 삭제 |
+| GET | `/api/me` | 로그인 | 내 계정 정보 |
+| POST | `/api/chat` | 로그인 | 질문 전송, AI 답변 반환, 대화 저장 |
+| GET | `/api/me/chats` | 로그인 | 내 대화 기록 |
 
-응답 예시 `200 OK`:
+## 오류 응답
+
+직접 정의한 오류는 모두 같은 형식입니다. 사용자가 보낸 값, 비밀번호, DB 주소, AI 서버의 오류 본문은 응답에 넣지 않습니다.
 
 ```json
 {
-  "status": "ok",
-  "service": "next-star-hunter"
+  "error": "EMAIL_EXISTS",
+  "message": "이미 가입된 이메일입니다."
 }
 ```
 
-## 화면 (HTML)
+| 상태 | `error` | 상황 |
+|---|---|---|
+| 401 | `INVALID_CREDENTIALS` | 이메일 또는 비밀번호 불일치 |
+| 401 | `LOGIN_REQUIRED` | 로그인 쿠키가 없음, 만료됨, 계정이나 세션 행이 사라짐 |
+| 401 | `SESSION_REPLACED` | 같은 계정이 다른 곳에서 로그인해 이 세션이 끊김 |
+| 403 | `ORIGIN_NOT_ALLOWED` | 다른 출처의 브라우저가 보낸 `POST` 요청 |
+| 409 | `EMAIL_EXISTS` | 이미 가입된 이메일로 회원가입 |
+| 422 | `VALIDATION_ERROR` | 입력 형식 오류 (아래 참고) |
+| 502 | `AI_ERROR` | AI API 오류 응답, 연결 실패, 빈 응답, 응답 형식 오류 |
+| 503 | `AUTH_NOT_CONFIGURED` | `SECRET_KEY`가 없거나 32자 미만, 또는 `DATABASE_URL`이 없음 |
+| 503 | `DB_NOT_CONFIGURED` | `DATABASE_URL`이 PostgreSQL 주소가 아니거나 DB 이름이 없음 |
+| 503 | `DB_UNAVAILABLE` | DB 연결이나 쿼리 실패 |
+| 503 | `AI_NOT_CONFIGURED` | 서버에 `LLM_API_KEY`가 없음 |
+| 504 | `AI_TIMEOUT` | AI API가 `LLM_TIMEOUT_SECONDS`(기본 90초) 안에 응답하지 않음 |
 
-- [x] `GET /`: 채팅 화면. 로그인하지 않았다면 `303`으로 `/auth`로, 다른 곳의 로그인으로 세션이 끊겼다면 `/auth?reason=session_replaced`로 이동
-- [x] `GET /auth`: 로그인·회원가입 화면. 이미 로그인했다면 `303`으로 `/`로 이동. 끊긴 세션의 쿠키는 지우고 화면을 그대로 보여줍니다.
-- [x] `GET /static/...`: `frontend/static`의 CSS·JS
+입력 형식 오류는 `fields`에 오류 위치만 담습니다. 입력값은 비밀번호일 수 있어 돌려주지 않습니다. JSON 문법이 틀리면 위치가 글자 번호로 나옵니다(`[["body", 9]]`).
 
-화면 경로는 JSON API가 아니라서 Swagger(`/docs`)에는 나오지 않습니다. 화면 이동 때도 쿠키의 세션을 `user_sessions`와 비교합니다. DB에 연결할 수 없을 때만 쿠키만 보고 판단하고, 이때는 화면 스크립트가 `GET /api/me`의 `401`을 받아 처리합니다.
+```
+POST /api/auth/register {"email":"bad","password":"short"}
+HTTP 422
+{
+  "error": "VALIDATION_ERROR",
+  "message": "입력 형식을 확인해주세요.",
+  "fields": [["body", "email"], ["body", "password"]]
+}
+```
+
+없는 경로 같은 그 밖의 HTTP 오류는 `{"error": "HTTP_ERROR", "message": "Not Found"}`처럼 응답합니다.
+
+## 시스템과 화면
+
+### GET /health
+
+DB와 AI 설정 없이도 응답합니다. Railway 헬스체크와 배포 후 스모크 검사가 이 경로를 씁니다.
+
+```
+GET /health
+HTTP 200
+{"status": "ok", "service": "next-star-hunter"}
+```
+
+### GET /, GET /auth
+
+HTML 화면이라 Swagger에는 나오지 않습니다. 쿠키의 세션을 `user_sessions`와 비교해 이동할 곳을 정합니다.
+
+| 요청 | 상태 | 응답 |
+|---|---|---|
+| `GET /` (로그인 상태) | 200 | 채팅 화면 |
+| `GET /` (로그인 안 함, 세션 만료) | 303 | `Location: /auth` |
+| `GET /` (다른 곳의 로그인으로 세션이 끊김) | 303 | `Location: /auth?reason=session_replaced` |
+| `GET /auth` (로그인 상태) | 303 | `Location: /` |
+| `GET /auth` (그 밖) | 200 | 로그인·회원가입 화면. 끊긴 세션의 쿠키는 지웁니다 |
+
+DB에 연결할 수 없으면 서명된 쿠키만 보고 화면을 열고, 화면 스크립트가 `GET /api/me`의 응답으로 다시 판단합니다. 정적 파일은 `/static/css/`, `/static/js/`로 제공합니다.
 
 ## 인증
 
-- [x] `POST /api/auth/register`: 회원가입 및 비밀번호 해시 저장
-- [x] `POST /api/auth/login`: 로그인 및 인증 상태 생성
-- [x] `POST /api/auth/logout`: 로그아웃 (로그인 필요, `204`)
-- [x] `GET /api/me`: 로그인한 사용자 정보 조회
-- [x] 비로그인 사용자의 대화 API 접근 차단
-- [x] 계정당 로그인 세션 하나만 유지 (마지막 로그인 우선)
+### POST /api/auth/register
 
-회원가입 요청 예시:
+인증: 없음
 
-```json
-{
-  "email": "user@example.com",
-  "password": "사용자가 입력한 비밀번호"
-}
+`email`은 이메일 형식이고 254자 이하이며 소문자로 바꿔 저장합니다. `password`는 8자 이상 128자 이하이고 공백만으로 이뤄질 수 없습니다. 그 밖의 필드는 받지 않습니다. 비밀번호는 해시만 저장합니다.
+
 ```
-
-회원가입 성공 시 `201`, 로그인 성공 시 `200`으로 아래 형식의 사용자 정보를 돌려줍니다. `GET /api/me`도 같은 형식입니다.
-
-```json
+POST /api/auth/register {"email":"User@Example.com","password":"password1234"}
+HTTP 201
 {
   "id": 1,
   "email": "user@example.com",
-  "created_at": "2026-10-29T12:00:00Z"
+  "created_at": "2026-10-30T07:40:12.246172Z"
 }
 ```
 
-비밀번호는 8자 이상 128자 이하입니다. 비밀번호 원문은 DB나 응답에 저장·포함하지 않습니다. 중복 계정과 인증 실패는 사용자에게 이해 가능한 오류로 반환합니다.
+```
+POST /api/auth/register {"email":"user@example.com","password":"password1234"}
+HTTP 409
+{
+  "error": "EMAIL_EXISTS",
+  "message": "이미 가입된 이메일입니다."
+}
+```
 
-| 상황 | 상태 코드 | `error` |
-| --- | --- | --- |
-| 입력 형식 오류(이메일 형식, 비밀번호 길이) | 422 | `VALIDATION_ERROR` |
-| 이미 가입된 이메일 | 409 | `EMAIL_EXISTS` |
-| 이메일 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
-| 로그인하지 않고 `logout`·`me` 호출 | 401 | `LOGIN_REQUIRED` |
-| 같은 계정이 다른 곳에서 로그인해 이 세션이 끊김 | 401 | `SESSION_REPLACED` |
-| 허용되지 않은 출처에서 요청 | 403 | `ORIGIN_NOT_ALLOWED` |
-| 서버 인증 설정 누락 | 503 | `AUTH_NOT_CONFIGURED` |
-| 서버 DB 설정 오류 | 503 | `DB_NOT_CONFIGURED` |
-| DB 요청 처리 실패 | 503 | `DB_UNAVAILABLE` |
+| 상태 | `error` | 상황 |
+|---|---|---|
+| 403 | `ORIGIN_NOT_ALLOWED` | 다른 출처의 브라우저 요청 |
+| 409 | `EMAIL_EXISTS` | 이미 가입된 이메일 (대소문자 무시) |
+| 422 | `VALIDATION_ERROR` | 이메일 형식, 비밀번호 길이, 알 수 없는 필드 |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 |
+
+### POST /api/auth/login
+
+인증: 없음
+
+회원가입과 같은 형식(`email`, `password`)을 받습니다. 성공하면 세션 쿠키를 발급하고 내 계정 정보를 돌려줍니다. 같은 계정의 이전 로그인은 끊깁니다([계정당 세션 하나](#계정당-세션-하나)).
+
+```
+POST /api/auth/login {"email":"user@example.com","password":"password1234"}
+HTTP 200
+Set-Cookie: next_star_session=...; path=/; Max-Age=28800; httponly; samesite=lax; secure
+{
+  "id": 1,
+  "email": "user@example.com",
+  "created_at": "2026-10-30T07:40:12.246172Z"
+}
+```
+
+```
+POST /api/auth/login {"email":"user@example.com","password":"wrongpass1"}
+HTTP 401
+{
+  "error": "INVALID_CREDENTIALS",
+  "message": "이메일 또는 비밀번호를 확인해주세요."
+}
+```
+
+가입하지 않은 이메일도 같은 `INVALID_CREDENTIALS`로 응답해 계정이 있는지 드러내지 않습니다. 비밀번호가 8자 미만이면 확인 전에 `422`가 됩니다.
+
+| 상태 | `error` | 상황 |
+|---|---|---|
+| 401 | `INVALID_CREDENTIALS` | 이메일 또는 비밀번호 불일치 |
+| 403 | `ORIGIN_NOT_ALLOWED` | 다른 출처의 브라우저 요청 |
+| 422 | `VALIDATION_ERROR` | 이메일 형식, 비밀번호 길이, 알 수 없는 필드 |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 |
+
+### POST /api/auth/logout
+
+인증: 로그인
+
+요청 본문은 없습니다. 쿠키를 지우고 `user_sessions` 행을 삭제합니다. 행은 지금 세션의 것일 때만 지우므로, 이미 끊긴 세션에서 로그아웃해도 다른 곳의 새 로그인은 유지됩니다.
+
+```
+POST /api/auth/logout
+HTTP 204
+Set-Cookie: next_star_session=null; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; httponly; samesite=lax; secure
+```
+
+| 상태 | `error` | 상황 |
+|---|---|---|
+| 401 | `LOGIN_REQUIRED`, `SESSION_REPLACED` | 로그인하지 않았거나 세션이 끊김 |
+| 403 | `ORIGIN_NOT_ALLOWED` | 다른 출처의 브라우저 요청 |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 |
+
+### GET /api/me
+
+인증: 로그인
+
+```
+GET /api/me
+HTTP 200
+{
+  "id": 1,
+  "email": "user@example.com",
+  "created_at": "2026-10-30T07:40:12.246172Z"
+}
+```
+
+```
+GET /api/me
+HTTP 401
+{
+  "error": "LOGIN_REQUIRED",
+  "message": "로그인이 필요합니다."
+}
+```
+
+| 상태 | `error` | 상황 |
+|---|---|---|
+| 401 | `LOGIN_REQUIRED` | 로그인하지 않음. 계정이나 세션 행이 사라졌으면 문구가 "다시 로그인해주세요."입니다 |
+| 401 | `SESSION_REPLACED` | 다른 곳에서 로그인해 이 세션이 끊김 |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 |
 
 ### 계정당 세션 하나
 
-같은 계정은 마지막으로 로그인한 한 곳에서만 쓸 수 있습니다. 계정을 같이 쓰거나 다른 기기에 로그인해 둔 채로 두었을 때 누가 어떤 대화를 남겼는지 섞이지 않게 하려는 것입니다.
+같은 계정은 마지막으로 로그인한 한 곳에서만 쓸 수 있습니다. 계정을 같이 쓰거나 다른 기기에 로그인해 둔 채로 두었을 때 누구의 대화인지 섞이지 않게 하려는 규칙입니다.
 
-- 로그인하면 서버가 임의의 세션 ID를 만들고, 서명된 세션 쿠키에 사용자 ID와 함께 넣습니다. DB의 `user_sessions`에는 그 ID의 SHA-256 해시만 저장하고, 이전 로그인 행은 덮어씁니다.
-- 로그인이 필요한 API(`logout`, `me`, `chat`, `me/chats`)는 요청마다 쿠키의 세션 ID를 저장된 해시와 비교합니다(상수 시간 비교).
-- 해시가 다르면 다른 곳에서 다시 로그인한 것이므로 쿠키 세션을 지우고 아래처럼 `401`을 돌려줍니다. 화면 스크립트는 이 코드를 받으면 `/auth?reason=session_replaced`로 보내 안내를 띄우는 것으로 정했습니다(화면 쪽은 프론트 작업에서 반영).
-- 로그아웃은 저장된 행이 지금 세션과 같을 때만 지웁니다. 끊긴 세션에서 로그아웃해도 새 로그인은 그대로 유지됩니다.
+- 로그인하면 서버가 임의의 세션 ID를 만들어 서명된 쿠키에 사용자 ID와 함께 넣고, `user_sessions`에는 그 ID의 SHA-256 해시만 저장합니다. 이전 로그인의 행은 덮어씁니다.
+- 로그인이 필요한 API(`logout`, `me`, `chat`, `me/chats`)와 화면 이동은 요청마다 쿠키의 세션 ID를 저장된 해시와 상수 시간으로 비교합니다.
+- 해시가 다르면 쿠키 세션을 지우고 `401 SESSION_REPLACED`로 응답하며 서버 로그에 `session_replaced`를 남깁니다. 채팅 화면은 이 응답을 받으면 `/auth?reason=session_replaced`로 이동해 "다른 곳에서 로그인되어 로그아웃되었어요. 다시 로그인해 주세요."를 표시합니다.
 
-```json
+```
+POST /api/chat {"message":"요즘 인기 있는 배우 알려줘"}
+HTTP 401
 {
   "error": "SESSION_REPLACED",
   "message": "다른 곳에서 로그인되어 로그아웃되었습니다."
 }
 ```
 
-## 채팅 및 기록
+## 채팅과 기록
 
-- [x] `POST /api/chat`: 질문 검증, AI API 호출, 응답 및 로그 저장
-- [x] 최근 대화를 이용해 같은 사용자의 문맥 유지
-- [x] `GET /api/me/chats`: 로그인한 사용자의 대화 기록 조회
-- [x] AI 실패·시간 초과 시 오류 안내와 서버 로그 기록
-- [x] 나무위키 스타 자료 검색 결과를 답변 근거로 넣고 출처 표시
+### POST /api/chat
 
-### `POST /api/chat`
+인증: 로그인
 
-로그인한 사용자만 호출할 수 있습니다. 질문은 앞뒤 공백을 지운 뒤 1자 이상 1000자 이하여야 하고, `message` 외의 필드는 받지 않습니다.
+`message`는 앞뒤 공백을 지운 뒤 1자 이상 1000자 이하여야 하고, 그 밖의 필드는 받지 않습니다. 서버는 다음 순서로 처리합니다.
 
-요청 예시:
+1. 같은 사용자의 최근 질문·답변 5쌍을 `chat_logs`에서 읽습니다.
+2. 질문으로 스타 자료(`star_profiles`, `star_chunks`)를 검색합니다. 질문에 조건이 없으면 바로 앞 질문의 조건을 이어받습니다. 검색 규칙은 [DATA.md](DATA.md#채팅-검색)에 있습니다.
+3. 시스템 프롬프트, 검색 결과(`<참고자료>` 블록), 최근 5쌍, 새 질문을 AI API에 보냅니다. 이전 답변에 붙은 출처 줄은 빼고 보냅니다.
+4. 답변에서 언급한 스타만 골라 `출처: 나무위키(CC BY-NC-SA 2.0 KR) - 이름1, 이름2` 줄을 붙입니다(아무도 언급하지 않았으면 검색된 스타 전부). 모델이 직접 쓴 출처 줄은 지웁니다. 검색 결과가 없으면 출처 줄을 붙이지 않습니다.
+5. 질문과 답변(출처 줄 포함)을 `chat_logs`에 저장하고 응답합니다.
 
-```json
-{
-  "message": "안경을 쓴 부산 출신 아이돌을 추천해줘"
-}
 ```
-
-성공 응답 예시 `200 OK`:
-
-```json
+POST /api/chat {"message":"안경 쓴 부산 출신 아이돌 추천해줘"}
+HTTP 200
 {
   "id": 1,
-  "question": "안경을 쓴 부산 출신 아이돌을 추천해줘",
-  "answer": "부산 출신 아이돌이라면 ○○를 추천해요. ...\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - ○○, △△",
-  "created_at": "2026-10-29T12:00:00Z",
+  "question": "안경 쓴 부산 출신 아이돌 추천해줘",
+  "answer": "부산 출신에 안경 착용으로 유명한 분들이 자료에 몇 명 있어요. 조유리는 IZ*ONE 출신으로 부산 남구 태생인데, (생략)\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 조유리, 강혜원, 산들",
+  "created_at": "2026-10-30T07:41:15.917402Z",
   "saved": true
 }
 ```
 
-AI 답변은 받았지만 DB 저장에 실패하면 답변은 그대로 돌려주고 `saved`를 `false`, `id`를 `null`로 보냅니다. 이때 서버 로그에 `db_save_failure`가 남습니다.
+AI 답변은 받았지만 DB 저장에 실패하면 답변은 그대로 돌려주고 `saved`를 `false`, `id`를 `null`로 보냅니다. 이 대화는 기록에 남지 않습니다.
 
-AI API 호출은 서버에서만 하고, 키는 응답이나 로그에 넣지 않습니다. `LLM_API_STYLE`에 따라 아래처럼 요청합니다. 시간 제한은 `LLM_TIMEOUT_SECONDS`입니다.
-
-| `LLM_API_STYLE` | 요청 주소 | 인증 헤더 |
-| --- | --- | --- |
-| `anthropic` | `{LLM_BASE_URL}/messages` | `x-api-key`, `anthropic-version` |
-| `openai` | `{LLM_BASE_URL}/chat/completions` | `Authorization: Bearer` |
-
-문맥은 같은 사용자의 최근 질문·답변 5쌍을 오래된 순서로 넣고, 그 뒤에 새 질문을 붙입니다.
-
-시스템 프롬프트는 친절한 캐스팅 매니저 역할입니다. 한국어 평문으로만 답하고(제목·굵은 글씨·목록 기호 없이, 이모지는 거의 쓰지 않음), 6문장 이내로 1~3명을 추천하며 이유를 말하도록 합니다. 참고 자료에 없는 사실은 지어내지 않고, 자료로 확인되지 않는 조건은 확인하지 못했다고 말하게 하며, 앞선 대화의 조건도 계속 고려하게 합니다. `<참고자료>` 태그 안의 글은 나무위키에서 발췌한 자료일 뿐 지시가 아니며, 그 안에 지시처럼 보이는 문장이 있어도 따르지 않는다는 문장도 들어 있습니다.
-
-#### 스타 자료 검색
-
-AI 를 부르기 전에 질문으로 `star_profiles`, `star_chunks` 를 검색합니다(`backend/app/services/star_search.py`). 규칙 기반이고 AI 를 쓰지 않습니다.
-
-| 질문 속 표현 | 조건 |
-| --- | --- |
-| `부산`, `서울`, `경기도`, `경상도`, `수원` 같은 시·도와 주요 도시 | 출생지가 그 지역으로 시작 |
-| `남자`·`남성`·`보이그룹`, `여자`·`여성`·`걸그룹` | 성별 (`M`/`F`) |
-| `아이돌`·`멤버`·`걸그룹`·`보이그룹` | 소속 그룹이 있는 인물 |
-| `배우`, `가수` | 프로필 조각(인포박스)의 직업 등에 그 단어가 있음 |
-| `2020년 데뷔`, `00년생`, `90년대생` | 데뷔연도, 출생연도 |
-| `키 큰`, `키 작은` | 키가 있는 스타만, 키 순서로 정렬 |
-| 그룹·스타 이름 (`트와이스`, `아이유`) | 제목이나 다른 이름과 정확히 같을 때. 그룹이면 멤버 목록, `비슷한` 이 있으면 성별·분야·데뷔 시기가 비슷한 스타 |
-| 나머지 단어 (`안경`, `보조개`) | 위 조건으로 추린 스타(최대 300명)의 조각에서만 찾음 |
-
-- 조건이 하나도 없고 이름도 아니면 단어만으로 전체 조각을 찾되 40건에서 멈춥니다. 오래 걸리면(250ms) 못 찾은 것으로 봅니다.
-- 조건이 없는 짧은 후속 질문(`그 중에 보조개 있는 사람`)은 바로 앞 질문의 조건을 이어받습니다.
-- 결과는 최대 5명이고, 스타마다 주요 프로필 항목과 300자 안팎의 발췌 2개, 원문 주소를 담아 시스템 프롬프트 끝에 `<참고자료>` … `</참고자료>` 블록으로 붙입니다. 나무위키는 누구나 고칠 수 있는 문서라서 발췌·제목·다른 이름·섹션 이름에 이 태그(띄어 쓴 변형 포함)가 들어 있으면 지우고 넣어, 블록이 중간에 닫히지 않게 합니다. 찾지 못한 단어는 `자료에서 찾지 못한 조건` 으로 함께 알려 줍니다.
-- 결과가 있으면 서버가 답변 끝에 `출처: 나무위키(CC BY-NC-SA 2.0 KR) - 이름1, 이름2` 줄을 붙입니다. 이 줄까지 포함해 저장합니다. 결과가 없으면 붙이지 않고 시스템 프롬프트도 기본 그대로입니다.
-- 스타 테이블이 없거나 비어 있거나 DB 오류가 나도 채팅은 그대로 동작합니다(참고 자료 없이 답변). PostgreSQL 에서는 검색 쿼리마다 250ms 제한을 둡니다.
-
-| 상황 | 상태 코드 | `error` |
-| --- | --- | --- |
-| 로그인하지 않음 | 401 | `LOGIN_REQUIRED` |
-| 다른 곳의 로그인으로 세션이 끊김 | 401 | `SESSION_REPLACED` |
-| 허용되지 않은 출처에서 요청 | 403 | `ORIGIN_NOT_ALLOWED` |
-| 빈 질문, 1000자 초과, 알 수 없는 필드 | 422 | `VALIDATION_ERROR` |
-| AI API 오류 응답·연결 실패·응답 형식 오류 | 502 | `AI_ERROR` |
-| AI API 설정 누락 | 503 | `AI_NOT_CONFIGURED` |
-| 최근 대화 조회 등 DB 요청 실패 | 503 | `DB_UNAVAILABLE` |
-| AI API 응답 시간 초과 | 504 | `AI_TIMEOUT` |
-
-오류 응답 예시 `504`:
-
-```json
+```
+POST /api/chat {"message":"요즘 인기 있는 배우 알려줘"}
+HTTP 504
 {
   "error": "AI_TIMEOUT",
   "message": "현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요."
 }
 ```
 
-서버 로그 예시 (질문·답변 내용과 키는 남기지 않습니다):
-
-```text
-INFO next_star_hunter request_received method=POST path=/api/chat request_id=...
-INFO next_star_hunter star_search_done request_id=... hits=5 latency_ms=36
-INFO next_star_hunter ai_call_start user_id=12 request_id=...
-INFO next_star_hunter ai_call_success request_id=... latency_ms=1240
-INFO next_star_hunter db_save_success user_id=12 chat_id=987 request_id=...
+```
+POST /api/chat {"message":"   "}
+HTTP 422
+{
+  "error": "VALIDATION_ERROR",
+  "message": "입력 형식을 확인해주세요.",
+  "fields": [["body", "message"]]
+}
 ```
 
-실패하면 `ai_call_failure request_id=... error=AI_TIMEOUT reason=ReadTimeout` 또는 `db_save_failure user_id=12 request_id=... error_type=OperationalError`가 남습니다. 스타 검색이 실패하면 `star_search_failure request_id=... error_type=ProgrammingError` 가 남고 채팅은 계속됩니다.
+| 상태 | `error` | 상황 |
+|---|---|---|
+| 401 | `LOGIN_REQUIRED` | 로그인하지 않음 |
+| 401 | `SESSION_REPLACED` | 다른 곳에서 로그인해 이 세션이 끊김 |
+| 403 | `ORIGIN_NOT_ALLOWED` | 다른 출처의 브라우저 요청 |
+| 422 | `VALIDATION_ERROR` | 빈 질문, 1000자 초과, 알 수 없는 필드 |
+| 502 | `AI_ERROR` | AI API 오류 응답, 연결 실패, 빈 응답, 응답 형식 오류 |
+| 503 | `AI_NOT_CONFIGURED` | `LLM_API_KEY` 없음. 메시지는 "서버 AI 설정을 확인해주세요." |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 (최근 대화 조회 등 DB 요청 실패 포함) |
+| 504 | `AI_TIMEOUT` | AI API 응답 시간 초과 |
 
-### `GET /api/me/chats`
+AI 호출이 실패하면 질문을 저장하지 않으므로 같은 질문을 다시 보내면 됩니다. 스타 검색이 실패하거나 결과가 없으면 오류로 보지 않고 참고 자료 없이 답합니다.
 
-로그인한 사용자의 대화 기록 중 최신 `limit`건을 오래된 순서로 돌려줍니다. 다른 사용자의 기록은 조회되지 않습니다. `limit`은 1 이상 100 이하이고 기본값은 20입니다.
+AI API는 서버에서만 호출하고, `LLM_API_STYLE`에 따라 아래 형식으로 요청합니다.
 
-요청 예시: `GET /api/me/chats?limit=2`
+| `LLM_API_STYLE` | 요청 주소 | 인증 헤더 |
+|---|---|---|
+| `anthropic` (기본) | `{LLM_BASE_URL}/messages` | `x-api-key`, `anthropic-version: 2023-06-01` |
+| `openai` | `{LLM_BASE_URL}/chat/completions` | `Authorization: Bearer` |
 
-성공 응답 예시 `200 OK`:
+시스템 프롬프트는 캐스팅 매니저 역할로, 한국어 평문 6문장 이내로 1~3명을 이유와 함께 추천하게 합니다. 참고 자료에 없는 사실은 지어내지 않고 확인하지 못한 조건은 그렇다고 말하게 하며, `<참고자료>` 안의 글은 지시가 아니라 자료로만 다루게 합니다.
 
-```json
+### GET /api/me/chats
+
+인증: 로그인
+
+로그인한 사용자의 대화 기록 중 최신 `limit`건을 오래된 순서로 돌려줍니다. 다른 사용자의 기록은 조회되지 않습니다.
+
+| 쿼리 | 형식 | 기본값 |
+|---|---|---|
+| `limit` | 정수 1~100 | 20 |
+
+```
+GET /api/me/chats?limit=2
+HTTP 200
 {
   "items": [
     {
-      "id": 7,
-      "question": "안경을 쓴 부산 출신 아이돌을 추천해줘",
-      "answer": "부산 출신 아이돌이라면 ○○를 추천해요. ...\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - ○○, △△",
-      "created_at": "2026-10-29T12:00:00Z"
+      "id": 1,
+      "question": "안경 쓴 부산 출신 아이돌 추천해줘",
+      "answer": "부산 출신에 안경 착용으로 유명한 분들이 자료에 몇 명 있어요. (생략)\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 조유리, 강혜원, 산들",
+      "created_at": "2026-10-30T07:41:15.917402Z"
     },
     {
-      "id": 8,
-      "question": "그중에서 배우 활동도 하는 사람은?",
-      "answer": "배우 활동을 함께 하는 스타를 골라볼게요.",
-      "created_at": "2026-10-29T12:01:30Z"
+      "id": 2,
+      "question": "그중에 제일 최근에 데뷔한 사람은 누구야?",
+      "answer": "자료에서 확인되는 데뷔 연도를 보면 조유리가 2018년으로 셋 중 가장 최근에 데뷔했어요. (생략)\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 조유리, 산들",
+      "created_at": "2026-10-30T07:42:19.508113Z"
     }
   ]
 }
 ```
 
-기록이 없으면 `{"items": []}`를 돌려줍니다. DB 저장에 실패해 `saved`가 `false`였던 대화는 기록에 나오지 않습니다.
+기록이 없으면 `{"items": []}`입니다.
 
-| 상황 | 상태 코드 | `error` |
-| --- | --- | --- |
-| 로그인하지 않음 | 401 | `LOGIN_REQUIRED` |
-| `limit`이 범위를 벗어나거나 정수가 아님 | 422 | `VALIDATION_ERROR` |
-| DB 요청 실패 | 503 | `DB_UNAVAILABLE` |
+```
+GET /api/me/chats?limit=0
+HTTP 422
+{
+  "error": "VALIDATION_ERROR",
+  "message": "입력 형식을 확인해주세요.",
+  "fields": [["query", "limit"]]
+}
+```
 
-`422` 응답의 `fields`는 `[["query", "limit"]]`입니다.
+| 상태 | `error` | 상황 |
+|---|---|---|
+| 401 | `LOGIN_REQUIRED` | 로그인하지 않음 |
+| 401 | `SESSION_REPLACED` | 다른 곳에서 로그인해 이 세션이 끊김 |
+| 422 | `VALIDATION_ERROR` | `limit`이 범위를 벗어나거나 정수가 아님 |
+| 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 |
 
-DB에서 직접 확인할 때는 `scripts/check_logs.sql`을 사용합니다. 사용 방법은 [데이터베이스 문서](DATABASE.md)에 적었습니다.
+DB에서 직접 확인하는 방법은 [README](../README.md#sql로-확인하기)에 있습니다.
