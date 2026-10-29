@@ -1,6 +1,6 @@
 # API 명세
 
-엔드포인트별 요청·응답 예시와 오류를 정리합니다. 요청·응답 스키마는 `ENABLE_API_DOCS=true`로 실행한 서버의 `/docs`(Swagger UI)에서도 볼 수 있습니다. 운영 서버(https://next-star-hunter-production.up.railway.app)에서는 꺼 두었습니다.
+엔드포인트별 요청·응답 예시와 오류를 정리합니다. 요청·응답 스키마는 Swagger UI(https://next-star-hunter-production.up.railway.app/docs)에서도 볼 수 있습니다. Swagger UI와 `/openapi.json`은 `ENABLE_API_DOCS=true`일 때만 열립니다.
 
 - 요청과 응답 본문은 JSON입니다. 시각은 UTC 기준 ISO 8601 문자열입니다.
 - 로그인하면 `next_star_session` 쿠키(HttpOnly, SameSite=Lax, 8시간, 운영은 Secure)가 발급되고, 로그인이 필요한 API는 이 쿠키로 사용자를 확인합니다.

@@ -41,7 +41,7 @@ Variables 탭에서 **이름만** 만들고 값은 팀이 직접 입력합니다
 | `DATABASE_URL` | 필수 | Postgres 서비스의 참조 변수 `${{Postgres.DATABASE_URL}}`로 넣는다(값 복사 불필요) |
 | `LLM_API_KEY` | 필수 | copa 키 |
 | `SESSION_HTTPS_ONLY` | `true` | 세션 쿠키를 HTTPS에서만 보낸다 |
-| `ENABLE_API_DOCS` | `false` | `/docs`·`/openapi.json`을 열지 않는다 |
+| `ENABLE_API_DOCS` | `true` | `/docs`(Swagger UI)·`/openapi.json`을 열어 API를 확인할 수 있게 한다. 닫으려면 `false` |
 | `LOG_FILE_PATH` | 선택 | 영속 볼륨을 붙였을 때만 경로를 넣는다(예: `/data/logs/app.log`). 콘솔 로그와 같은 형식으로 파일에도 남고, 열 수 없으면 경고만 남긴다 |
 | `PORT` | 넣지 않음 | Railway가 런타임에 자동 주입 |
 

@@ -182,7 +182,7 @@ erDiagram
 
 ## API
 
-요청·응답 예시와 엔드포인트별 오류는 [docs/API.md](docs/API.md)에 있습니다. `ENABLE_API_DOCS=true`로 실행하면 `/docs`(Swagger UI)에서 스키마를 확인하고 직접 호출해 볼 수 있습니다. 운영 서버에서는 꺼 두었습니다.
+요청·응답 예시와 엔드포인트별 오류는 [docs/API.md](docs/API.md)에 있고, 요청·응답 스키마는 Swagger UI(https://next-star-hunter-production.up.railway.app/docs)에서 확인할 수 있습니다. Swagger UI에서 `POST /api/auth/login`을 실행하면 이후 요청을 로그인 상태로 시험할 수 있습니다. Swagger UI는 `ENABLE_API_DOCS=true`일 때만 열립니다.
 
 | 메서드 | 경로 | 로그인 | 설명 |
 |---|---|---|---|
@@ -391,7 +391,7 @@ Windows PowerShell에서는 `Copy-Item .env.example .env`, `$env:PYTHONPATH = "b
 | `LLM_TIMEOUT_SECONDS` | 선택 | AI 호출 시간 제한(초) | `90` |
 | `LLM_MAX_COMPLETION_TOKENS` | 선택 | 응답 최대 토큰 수 | `8000` |
 | `SESSION_HTTPS_ONLY` | 선택 | 세션 쿠키를 HTTPS에서만 보냄. 운영은 `true` | `false` |
-| `ENABLE_API_DOCS` | 선택 | `/docs`, `/openapi.json` 노출. 운영은 `false` | `false` |
+| `ENABLE_API_DOCS` | 선택 | `/docs`(Swagger UI), `/openapi.json` 노출 | `false` |
 | `LOG_FILE_PATH` | 선택 | 앱 로그를 이 파일에도 기록. 열 수 없으면 경고만 남기고 콘솔 로그는 계속 | 없음 |
 
 `SECRET_KEY`나 `DATABASE_URL`이 없어도 서버는 뜨고 `/health`는 응답합니다. 이때 계정·채팅 API는 `503 AUTH_NOT_CONFIGURED`, `LLM_API_KEY`가 없으면 채팅만 `503 AI_NOT_CONFIGURED`로 응답합니다.
