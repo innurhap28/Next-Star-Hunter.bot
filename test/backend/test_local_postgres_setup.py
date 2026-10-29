@@ -56,3 +56,22 @@ def test_missing_runtime_does_not_create_credentials(tmp_path, monkeypatch):
     with pytest.raises(local.SetupError, match="binaries are missing"):
         local.setup_database()
     assert not list(tmp_path.iterdir())
+
+
+def test_failed_initdb_removes_temporary_password_file(tmp_path, monkeypatch):
+    local_dir = isolate(tmp_path, monkeypatch)
+    runtime = tmp_path / "bin"
+    runtime.mkdir()
+    (runtime / "initdb.exe").touch()
+    monkeypatch.setattr(local, "BIN", runtime)
+    password_file = local_dir / "local-postgres-init-password.txt"
+
+    def failed_initdb(args, output):
+        assert password_file.is_file()
+        raise local.SetupError("PostgreSQL command failed.")
+
+    monkeypatch.setattr(local, "run_command", failed_initdb)
+    with pytest.raises(local.SetupError, match="command failed"):
+        local.setup_database()
+    assert not password_file.exists()
+    assert not (local_dir / "local-postgres-initialized.json").exists()

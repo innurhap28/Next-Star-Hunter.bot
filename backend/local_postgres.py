@@ -82,10 +82,14 @@ def setup_database():
                              "Preserve it and inspect the init log before retrying.")
         password_file = LOCAL / "local-postgres-init-password.txt"
         password_file.write_text(state["admin_password"] + "\n", encoding="utf-8")
-        run_command([BIN / "initdb.exe", "-D", DATA, "-U", state["admin"],
-                     "--pwfile=" + str(password_file), "--auth=scram-sha-256",
-                     "--encoding=UTF8", "--no-locale"],
-                    LOCAL / "local-postgres-init.log")
+        try:
+            run_command([BIN / "initdb.exe", "-D", DATA, "-U", state["admin"],
+                         "--pwfile=" + str(password_file), "--auth=scram-sha-256",
+                         "--encoding=UTF8", "--no-locale"],
+                        LOCAL / "local-postgres-init.log")
+        finally:
+            # initdb reads it once; do not leave a second plaintext copy of the password.
+            password_file.unlink(missing_ok=True)
         INIT_MARKER.write_text(json.dumps({"initialized": True}), encoding="utf-8")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     status = subprocess.run([str(BIN / "pg_ctl.exe"), "status", "-D", str(DATA)],
