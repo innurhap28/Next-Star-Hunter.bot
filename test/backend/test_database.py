@@ -1,10 +1,11 @@
 import pytest
-from sqlalchemy import create_mock_engine
-from sqlalchemy.schema import CreateTable
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import CreateTable
+
 from app.config import Settings
 from app.database import Base, build_engine
-from app.models import User, ChatLog
+from app.models import ChatLog, User
+
 
 def test_postgres_metadata_contains_required_tables_and_timezone():
     ddl = str(CreateTable(User.__table__).compile(dialect=postgresql.dialect()))
