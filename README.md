@@ -134,16 +134,13 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 | --- | --- |
 | `SECRET_KEY` | 세션 및 서명용 비밀 키 |
 | `DATABASE_URL` | PostgreSQL 데이터베이스 연결 주소 |
-| `LOG_FILE_PATH` | 선택 사항인 로그 파일 경로 |
+| `LOG_FILE_PATH` | 선택. 넣으면 콘솔과 같은 형식으로 이 파일에도 로그를 남김(폴더 자동 생성, 열 수 없으면 경고만 남기고 서버는 계속 실행) |
 | `LLM_API_KEY` | AI API 인증 키 |
 | `LLM_BASE_URL` | AI API 주소. 기본값 copa(`https://copa.codyssey.kr/v1`) |
 | `LLM_API_STYLE` | AI API 요청 형식 선택 |
 | `LLM_MODEL` | 모델. 기본값 `claude-sonnet-4`(예비로 `claude-haiku-4`만 허용) |
 | `LLM_TIMEOUT_SECONDS` | AI API 호출 시간 제한(초) |
 | `LLM_MAX_COMPLETION_TOKENS` | 응답 최대 토큰 수 |
-| `LLM_JSON_MODE` | JSON 응답 모드 사용 여부 |
-| `CHAT_TOTAL_TIMEOUT_SECONDS` | 전체 채팅 요청 시간 제한(초) |
-| `KNOWLEDGE_USAGE_SCOPE` | 자료 사용 범위 설정 |
 | `SESSION_HTTPS_ONLY` | HTTPS 전용 세션 쿠키 설정 |
 | `ENABLE_API_DOCS` | API 문서 노출 여부 |
 

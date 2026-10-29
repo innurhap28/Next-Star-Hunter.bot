@@ -8,7 +8,7 @@ from ..crud.sessions import delete_user_session, new_session_id, replace_user_se
 from ..crud.users import create_user, get_user_by_email
 from ..dependencies import get_current_user, get_db
 from ..openapi_errors import LOGIN_ERRORS, LOGOUT_ERRORS, ME_ERRORS, REGISTER_ERRORS
-from ..schemas import Credentials, UserPublic
+from ..schemas.auth import Credentials, UserPublic
 from ..security import hash_password, verify_password
 
 router = APIRouter(prefix="/api", tags=["accounts"])

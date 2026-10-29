@@ -3,7 +3,7 @@
 These declarations describe the existing handlers and do not transform runtime
 responses. Examples are checked against actual HTTP responses in backend tests.
 """
-from .schemas import ErrorResponse, ValidationErrorResponse
+from .schemas.errors import ErrorResponse, ValidationErrorResponse
 
 
 def error_response(description, examples, model=ErrorResponse):

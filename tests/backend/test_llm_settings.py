@@ -7,8 +7,7 @@ from app.config import Settings
 from app.main import create_app
 
 LLM_KEYS = ["LLM_API_KEY", "LLM_BASE_URL", "LLM_API_STYLE", "LLM_MODEL",
-            "LLM_TIMEOUT_SECONDS", "LLM_MAX_COMPLETION_TOKENS", "LLM_JSON_MODE",
-            "CHAT_TOTAL_TIMEOUT_SECONDS", "KNOWLEDGE_USAGE_SCOPE", "LOG_FILE_PATH"]
+            "LLM_TIMEOUT_SECONDS", "LLM_MAX_COMPLETION_TOKENS", "LOG_FILE_PATH"]
 
 
 @pytest.fixture(autouse=True)
@@ -24,9 +23,6 @@ def test_defaults_without_llm_env():
     assert settings.LLM_MODEL == "claude-sonnet-4"
     assert settings.LLM_TIMEOUT_SECONDS == 90
     assert settings.LLM_MAX_COMPLETION_TOKENS == 8000
-    assert settings.LLM_JSON_MODE is False
-    assert settings.CHAT_TOTAL_TIMEOUT_SECONDS == 105
-    assert settings.KNOWLEDGE_USAGE_SCOPE == "educational_noncommercial"
     assert settings.LOG_FILE_PATH == ""
     assert not settings.llm_configured()
 
@@ -38,8 +34,6 @@ def test_reads_llm_values_from_env(monkeypatch):
     monkeypatch.setenv("LLM_MODEL", "claude-haiku-4")
     monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "30.5")
     monkeypatch.setenv("LLM_MAX_COMPLETION_TOKENS", "1024")
-    monkeypatch.setenv("LLM_JSON_MODE", "true")
-    monkeypatch.setenv("KNOWLEDGE_USAGE_SCOPE", "commercial")
     monkeypatch.setenv("LOG_FILE_PATH", "/data/logs/app.log")
     settings = Settings(_env_file=None)
     assert settings.LLM_API_KEY.get_secret_value() == "test-llm-key-value"
@@ -47,8 +41,6 @@ def test_reads_llm_values_from_env(monkeypatch):
     assert settings.LLM_MODEL == "claude-haiku-4"
     assert settings.LLM_TIMEOUT_SECONDS == 30.5
     assert settings.LLM_MAX_COMPLETION_TOKENS == 1024
-    assert settings.LLM_JSON_MODE is True
-    assert settings.KNOWLEDGE_USAGE_SCOPE == "commercial"
     assert settings.LOG_FILE_PATH == "/data/logs/app.log"
     assert settings.llm_configured()
 
@@ -68,8 +60,6 @@ def test_empty_values_from_env_example_use_defaults(tmp_path):
     ("LLM_TIMEOUT_SECONDS", "0"),
     ("LLM_TIMEOUT_SECONDS", "-5"),
     ("LLM_MAX_COMPLETION_TOKENS", "0"),
-    ("CHAT_TOTAL_TIMEOUT_SECONDS", "0"),
-    ("KNOWLEDGE_USAGE_SCOPE", "all"),
 ])
 def test_invalid_values_are_rejected(monkeypatch, key, value):
     monkeypatch.setenv(key, value)

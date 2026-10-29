@@ -1,68 +1,23 @@
-"""Chat API: recent context, AI call, chat log saving, and history lookup."""
-import logging
-import time
+"""Chat API: HTTP layer only. The chat flow lives in services/chat.py."""
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.exc import SQLAlchemyError
-
-from ..ai_client import AIError, ask_ai
-from ..crud.chat_logs import list_user_chats, recent_chat_pairs, save_chat_log
 from ..dependencies import get_current_user, get_db
-from ..models import utc_now
-from ..openapi_errors import CHAT_ERRORS, HISTORY_ERRORS
-from ..schemas import ChatHistoryResponse, ChatRequest, ChatResponse
-from ..star_search import StarSearchResult, format_reference, search_stars, source_line
+from ..openapi_errors import CHAT_ERRORS
+from ..schemas.chat import ChatRequest, ChatResponse
+from ..services.chat import AIError, answer_question
 
 router = APIRouter(prefix="/api", tags=["chat"])
-logger = logging.getLogger("next_star_hunter")
-CONTEXT_PAIRS = 5
 
 
 @router.post("/chat", response_model=ChatResponse, responses=CHAT_ERRORS)
 def chat(body: ChatRequest, request: Request, user=Depends(get_current_user),
          db=Depends(get_db)):
-    settings = request.app.state.settings
-    request_id = request.state.request_id
-    history = recent_chat_pairs(db, user.id, CONTEXT_PAIRS)
-    previous = history[-1].question if history else None
-    # Star data lookup never raises; with no data the AI answers without references.
-    found = StarSearchResult()
-    if settings.llm_configured():
-        found = search_stars(db.get_bind(), body.message, previous, request_id=request_id)
-    # Message text and answers are never logged; only ids, timing, and error codes.
-    logger.info("ai_call_start user_id=%s request_id=%s", user.id, request_id)
-    started = time.monotonic()
     try:
-        answer = ask_ai(settings, history, body.message, transport=request.app.state.ai_transport,
-                        references=format_reference(found))
+        result = answer_question(db, request.app.state.settings, user.id, body.message,
+                                 request_id=request.state.request_id,
+                                 transport=request.app.state.ai_transport)
     except AIError as error:
-        logger.warning("ai_call_failure request_id=%s error=%s reason=%s",
-                       request_id, error.code, error.reason)
         raise HTTPException(error.status_code,
                             {"error": error.code, "message": error.message}) from None
-    latency_ms = int((time.monotonic() - started) * 1000)
-    logger.info("ai_call_success request_id=%s latency_ms=%s", request_id, latency_ms)
-    credit = source_line(found)
-    if credit:
-        answer = answer + "\n\n" + credit
-
-    created_at = utc_now()
-    try:
-        log = save_chat_log(db, user.id, body.message, answer, created_at)
-    except SQLAlchemyError as error:
-        # The answer is already made, so return it and tell the client it was not saved.
-        logger.error("db_save_failure user_id=%s request_id=%s error_type=%s",
-                     user.id, request_id, type(error).__name__)
-        return ChatResponse(id=None, question=body.message, answer=answer,
-                            created_at=created_at, saved=False)
-    logger.info("db_save_success user_id=%s chat_id=%s request_id=%s",
-                user.id, log.id, request_id)
-    return ChatResponse(id=log.id, question=log.question, answer=log.answer,
-                        created_at=log.created_at, saved=True)
-
-
-@router.get("/me/chats", response_model=ChatHistoryResponse, responses=HISTORY_ERRORS)
-def my_chats(limit: int = Query(20, ge=1, le=100), user=Depends(get_current_user),
-             db=Depends(get_db)):
-    # Only the logged-in user's rows; the same query feeds the chat context.
-    return ChatHistoryResponse(items=list_user_chats(db, user.id, limit))
+    return ChatResponse(id=result.id, question=result.question, answer=result.answer,
+                        created_at=result.created_at, saved=result.saved)
