@@ -59,13 +59,17 @@ SERVICE_ERROR = error_response(
 )
 
 LOGIN_REQUIRED = error_response(
-    "로그인이 필요하거나 세션에 해당하는 사용자를 찾을 수 없습니다.",
+    "로그인이 필요하거나 세션에 해당하는 사용자를 찾을 수 없습니다. "
+    "같은 계정이 다른 곳에서 다시 로그인하면 이전 세션은 SESSION_REPLACED를 받습니다.",
     [
         ("login_required", "로그인되지 않은 요청", {
             "error": "LOGIN_REQUIRED", "message": "로그인이 필요합니다.",
         }),
         ("stale_session", "세션 사용자 없음", {
             "error": "LOGIN_REQUIRED", "message": "다시 로그인해주세요.",
+        }),
+        ("session_replaced", "다른 곳에서 같은 계정으로 로그인", {
+            "error": "SESSION_REPLACED", "message": "다른 곳에서 로그인되어 로그아웃되었습니다.",
         }),
     ],
 )
