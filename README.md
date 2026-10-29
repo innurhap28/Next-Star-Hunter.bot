@@ -171,6 +171,7 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 - 시스템 구조: [아키텍처 문서](docs/ARCHITECTURE.md)
 - API 요청·응답 명세: [API 문서](docs/API.md)
 - DB 테이블 및 필드: [데이터베이스 문서](docs/DATABASE.md)
+- 스타 자료 출처·라이선스·추출 방법: [데이터 문서](docs/DATA.md)
 - 배포 절차와 운영 환경 변수: [배포 런북](docs/DEPLOY.md)
 
 저장소 링크, 배포 URL, 실제 실행 명령, 로그 확인 방법은 구현 및 배포 후 검증 가능한 값으로 채웁니다.
