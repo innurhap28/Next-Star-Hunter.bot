@@ -35,6 +35,7 @@ backend/app/
 ├── dependencies.py     # get_db, get_current_user (로그인·세션 일치 확인 공통 의존성)
 ├── security.py         # 비밀번호 해시·검증
 ├── openapi_errors.py   # Swagger 에 보일 오류 응답 예시
+├── init_db.py          # 테이블 생성 스크립트 (python -m app.init_db)
 ├── routers/            # HTTP 경로: auth.py(계정), chat.py(채팅), logs.py(대화 기록), pages.py(화면)
 ├── services/           # 업무 흐름: chat.py(채팅 처리), ai_client.py(AI API 호출), star_search.py(스타 자료 검색)
 ├── crud/               # DB 접근 함수: users.py, sessions.py, chat_logs.py
