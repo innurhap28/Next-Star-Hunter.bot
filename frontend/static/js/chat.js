@@ -51,7 +51,8 @@
     logoutButton.disabled = true;
     try {
       const response = await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
-      await readResponse(response);
+      // 401 means the session has already expired, so the user is logged out either way.
+      if (response.status !== 401) await readResponse(response);
       window.location.assign("/auth");
     } catch (error) {
       logoutButton.disabled = false;
