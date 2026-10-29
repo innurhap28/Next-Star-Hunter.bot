@@ -550,6 +550,12 @@ def strip_trailing_source(text: str) -> str:
     return text
 
 
+def remove_source_lines(text: str) -> str:
+    """Remove every line the model wrote starting with '출처:', and trailing blank lines."""
+    lines = [ln for ln in text.split("\n") if not ln.lstrip().startswith(SOURCE_PREFIX)]
+    return "\n".join(lines).rstrip()
+
+
 def source_line(result: StarSearchResult) -> str:
     """Attribution appended to the answer by the server ('' when nothing was used)."""
     if not result.stars:
