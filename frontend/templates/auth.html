@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f5f2">
+    <title>{{ page_title | default("로그인 · Next Star Hunter") }}</title>
+    <link rel="stylesheet" href="../static/css/app.css">
+    <script src="../static/js/auth.js" defer></script>
+  </head>
+  <body class="auth-page">
+    <main class="auth-layout">
+      <a class="brand" href="/" aria-label="Next Star Hunter 홈">
+        <span class="brand-mark" aria-hidden="true">✦</span>
+        <span>Next Star Hunter</span>
+      </a>
+
+      <section class="auth-card" aria-labelledby="auth-title">
+        <p class="eyebrow">YOUR NEXT FAVORITE STAR</p>
+        <h1 id="auth-title">취향을 따라, 새로운 스타를 만나보세요</h1>
+        <p class="auth-intro">로그인하고 나만의 스타 헌팅을 시작해 보세요.</p>
+
+        <div class="auth-tabs" role="tablist" aria-label="계정 메뉴">
+          <button class="auth-tab is-active" id="login-tab" type="button" role="tab"
+                  aria-selected="true" aria-controls="login-panel" data-auth-tab="login">로그인</button>
+          <button class="auth-tab" id="signup-tab" type="button" role="tab"
+                  aria-selected="false" aria-controls="signup-panel" data-auth-tab="signup">회원가입</button>
+        </div>
+
+        <form class="auth-form" id="login-panel" role="tabpanel" aria-labelledby="login-tab" data-auth-panel="login" method="post" action="#">
+          <label for="login-email">이메일</label>
+          <input id="login-email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required>
+          <label for="login-password">비밀번호</label>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" required>
+          <button class="button button-primary button-full" type="submit">로그인</button>
+        </form>
+
+        <form class="auth-form" id="signup-panel" role="tabpanel" aria-labelledby="signup-tab" data-auth-panel="signup" method="post" action="#" hidden>
+          <label for="signup-name">닉네임</label>
+          <input id="signup-name" name="name" type="text" autocomplete="nickname" placeholder="화면에 표시할 이름" required>
+          <label for="signup-email">이메일</label>
+          <input id="signup-email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required>
+          <label for="signup-password">비밀번호</label>
+          <input id="signup-password" name="password" type="password" autocomplete="new-password" placeholder="8자 이상 입력해 주세요" minlength="8" required>
+          <button class="button button-primary button-full" type="submit">계정 만들기</button>
+        </form>
+
+        <p class="form-message" data-form-message aria-live="polite"></p>
+        <p class="auth-footnote">계속하면 서비스 이용에 필요한 안내를 확인한 것으로 간주됩니다.</p>
+      </section>
+      <p class="auth-caption">“내 눈은 틀리지 않아, 얘는 무조건 뜬다!”</p>
+    </main>
+  </body>
+</html>
