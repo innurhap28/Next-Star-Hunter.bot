@@ -27,21 +27,19 @@
                   aria-selected="false" aria-controls="signup-panel" data-auth-tab="signup">회원가입</button>
         </div>
 
-        <form class="auth-form" id="login-panel" role="tabpanel" aria-labelledby="login-tab" data-auth-panel="login" method="post" action="#">
+        <form class="auth-form" id="login-panel" role="tabpanel" aria-labelledby="login-tab" data-auth-panel="login">
           <label for="login-email">이메일</label>
-          <input id="login-email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required>
+          <input id="login-email" name="email" type="email" maxlength="254" autocomplete="email" placeholder="name@example.com" required>
           <label for="login-password">비밀번호</label>
-          <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" required>
+          <input id="login-password" name="password" type="password" maxlength="128" autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" required>
           <button class="button button-primary button-full" type="submit">로그인</button>
         </form>
 
-        <form class="auth-form" id="signup-panel" role="tabpanel" aria-labelledby="signup-tab" data-auth-panel="signup" method="post" action="#" hidden>
-          <label for="signup-name">닉네임</label>
-          <input id="signup-name" name="name" type="text" autocomplete="nickname" placeholder="화면에 표시할 이름" required>
+        <form class="auth-form" id="signup-panel" role="tabpanel" aria-labelledby="signup-tab" data-auth-panel="signup" hidden>
           <label for="signup-email">이메일</label>
-          <input id="signup-email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required>
+          <input id="signup-email" name="email" type="email" maxlength="254" autocomplete="email" placeholder="name@example.com" required>
           <label for="signup-password">비밀번호</label>
-          <input id="signup-password" name="password" type="password" autocomplete="new-password" placeholder="8자 이상 입력해 주세요" minlength="8" required>
+          <input id="signup-password" name="password" type="password" maxlength="128" autocomplete="new-password" placeholder="8자 이상 입력해 주세요" minlength="8" required>
           <button class="button button-primary button-full" type="submit">계정 만들기</button>
         </form>
 
