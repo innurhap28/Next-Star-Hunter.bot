@@ -1,0 +1,32 @@
+{
+  "purpose": "로컬 Swagger GET /health 정상 응답 증빙",
+  "verification_date_kst": "2026-10-30",
+  "environment": "local",
+  "method": "GET",
+  "endpoint": "/health",
+  "swagger_url": "http://127.0.0.1:8000/docs",
+  "http_status": 200,
+  "response_body": {
+    "status": "ok",
+    "service": "next-star-hunter"
+  },
+  "observed_headers": {
+    "content-type": "application/json",
+    "cache-control": "no-store",
+    "x-request-id_present": true
+  },
+  "image": "swagger-health-200.png",
+  "image_size_px": {
+    "width": 842,
+    "height": 545
+  },
+  "image_sha256": "aef979138b33316b02ac2147d85647c323ae27dbfde3d8efac1af9349d01c987",
+  "image_source": "사용자가 제공한 원본 캡처를 편집 없이 복사",
+  "verification_scope": "Swagger에서 /health를 실행해 정상 HTTP 응답을 확인한 기록입니다. 자동 테스트 또는 전체 서비스 검증의 완료를 의미하지 않습니다.",
+  "not_verified_by_this_capture": [
+    "실제 PostgreSQL 연결",
+    "실제 DB를 이용한 회원가입·로그인 통합",
+    "실제 AI API 호출",
+    "외부 네트워크 배포"
+  ]
+}
