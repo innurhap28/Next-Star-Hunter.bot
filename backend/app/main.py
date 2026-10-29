@@ -8,12 +8,13 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings
-from .routers import auth
+from .routers import auth, pages
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("next_star_hunter")
@@ -110,7 +111,9 @@ def create_app(settings=None, session_factory=None):
     async def health_check():
         return {"status": "ok", "service": "next-star-hunter"}
 
+    app.mount("/static", StaticFiles(directory=str(pages.STATIC_DIR)), name="static")
     app.include_router(auth.router)
+    app.include_router(pages.router)
     return app
 
 app = create_app()

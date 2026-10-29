@@ -100,6 +100,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
+### 웹 화면 열기
+
+서버를 실행한 뒤 브라우저에서 `http://127.0.0.1:8000/`를 엽니다. 로그인하지 않았다면 `/auth`(로그인·회원가입 화면)로 이동하고, 로그인하면 `/`에서 채팅 화면을 볼 수 있습니다. 로그인한 상태에서 `/auth`를 열면 `/`로 이동합니다. 화면 파일은 `frontend/templates`, CSS와 JS는 `frontend/static`에 있고 `/static` 경로로 제공됩니다. 회원가입과 로그인은 `.env`의 `SECRET_KEY`, `DATABASE_URL` 설정이 있어야 동작합니다. 채팅 입력은 아직 서버 API와 연결하지 않았습니다.
+
 ### Health 확인
 
 서버 실행 상태를 유지한 채 새 터미널에서 요청합니다.
