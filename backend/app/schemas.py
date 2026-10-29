@@ -7,8 +7,9 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 class Credentials(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: EmailStr = Field(max_length=254)
-    password: str = Field(min_length=8, max_length=128, repr=False)
+    # Swagger "Try it out" fills in these values, so they must pass validation.
+    email: EmailStr = Field(max_length=254, examples=["user@example.com"])
+    password: str = Field(min_length=8, max_length=128, repr=False, examples=["password1234"])
 
     @field_validator("email")
     @classmethod
