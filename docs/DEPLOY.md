@@ -17,9 +17,7 @@
 
 ## Railway 서비스 설정
 
-서비스(Settings 탭)에 아래 값을 넣습니다. Config as Code(`railway.toml`/`railway.json`/`.railway/railway.ts`)는
-만들지 않습니다 — Railway 공식 문서상 deprecated이고 신규 서비스는 opt-in이 불가능하며, 기존 파일도
-2026-12-01부터 읽지 않습니다. 설정은 대시보드에만 둡니다.
+서비스(Settings 탭)에 아래 값을 넣습니다. Railway 설정 파일(`railway.toml` 등)은 만들지 않고 설정은 대시보드에서만 관리합니다.
 
 | 항목 | 값 | 이유 |
 | --- | --- | --- |
@@ -60,7 +58,7 @@ DB 이름이 비어 있으면 `ValueError`가 나고 인증 API가 503 `DB_NOT_C
 ## 최초 배포 절차
 
 1. **저장소 admin이 브라우저에서** Railway에 GitHub App을 설치하고 `innurhap28/Next-Star-Hunter.bot`
-   저장소 접근을 허용한다(이 단계는 권한 문제라 CLI로 대신할 수 없다).
+   저장소 접근을 허용한다.
 2. Railway에서 New Project를 만든다.
 3. `Deploy from GitHub repo` → 위 저장소를 고른다.
 4. 브랜치를 `main`으로 지정한다.
@@ -90,7 +88,7 @@ gh variable set DEPLOY_URL --body <호스트>
 
 대시보드 → 서비스 → Deployments에서 직전 정상 배포를 고르고 `Redeploy`를 누릅니다.
 CLI로 특정 배포를 되돌리는 방법은 따로 정리하지 않았습니다.
-급하면 문제 커밋을 revert하는 PR을 만들어 `main`에 반영하는 방법이 가장 확실합니다.
+급하면 문제 커밋을 revert하는 PR을 `develop`에 병합한 뒤, `develop` → `main` 릴리스 PR로 반영하는 방법이 가장 확실합니다. `main`에는 직접 PR을 만들지 않습니다.
 
 ## 문제 해결
 
@@ -103,8 +101,4 @@ CLI로 특정 배포를 되돌리는 방법은 따로 정리하지 않았습니�
 
 ## 데이터(나무위키 덤프)
 
-지식 데이터(나무위키 덤프)는 **저장소에 넣지 않습니다.** 용량이 크고 라이선스가 코드와 다릅니다.
-
-- 현재 덤프: 약 30GB, 2026-08-29 기준이며 저장소 밖에서 따로 보관한다.
-- 라이선스: CC BY-NC-SA 2.0 KR — **비영리 전용**이므로 수익화·상업적 배포 시 사용 범위를 다시 확인해야 한다.
-- 운영 서버에 올릴 때는 Railway 볼륨이나 외부 스토리지에 두고 `LOG_FILE_PATH`처럼 경로만 환경변수로 넘긴다.
+스타 프로필 자료의 출처는 나무위키 덤프이며 라이선스는 CC BY-NC-SA 2.0 KR입니다. 비영리 목적으로만 사용하고 출처를 표시합니다. 원본 데이터는 저장소에 커밋하지 않습니다.
