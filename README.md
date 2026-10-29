@@ -152,11 +152,135 @@ erDiagram
 - `star_profiles`, `star_chunks`는 사용자 데이터와 연결하지 않고, 앱이 아니라 적재 스크립트(`python -m scripts.namuwiki.load`)가 채웁니다.
 - 필드 설명은 [데이터베이스 문서](docs/DATABASE.md)에 있습니다.
 
-## API 및 로그 확인
+## 6. API 요약
 
-API의 실제 경로와 요청·응답 예시는 구현 기준으로 [API 명세](docs/API.md)에 기록합니다. 로그인 사용자는 `GET /api/me/chats`로 자신의 대화 로그를 조회할 수 있고, DB에서는 `scripts/check_logs.sql`로 확인합니다. 확인 방법은 [데이터베이스 문서](docs/DATABASE.md#대화-로그-확인-방법)에 정리했습니다.
+| 메서드 | 경로 | 로그인 | 설명 |
+| --- | --- | --- | --- |
+| GET | `/health` | 불필요 | 서버 상태 확인 |
+| GET | `/` | 필요(아니면 `/auth`로 이동) | 채팅 화면 |
+| GET | `/auth` | 불필요(로그인 상태면 `/`로 이동) | 로그인·회원가입 화면 |
+| POST | `/api/auth/register` | 불필요 | 회원가입 (`201`) |
+| POST | `/api/auth/login` | 불필요 | 로그인, 세션 쿠키 발급, 이전 세션 교체 |
+| POST | `/api/auth/logout` | 필요 | 로그아웃 (`204`) |
+| GET | `/api/me` | 필요 | 내 계정 정보 |
+| POST | `/api/chat` | 필요 | 질문 → AI 답변, 대화 저장 |
+| GET | `/api/me/chats?limit=20` | 필요 | 내 대화 기록 (1~100건, 오래된 순) |
 
-서버 로그에는 요청 수신, AI 호출 시작 및 성공/실패, DB 저장 성공/실패 이벤트를 남깁니다. 민감정보와 API 키는 로그에 기록하지 않습니다.
+경로는 목적별로 계정(`/api/auth`, `/api/me`), 채팅(`/api/chat`), 기록(`/api/me/chats`)으로 나눴습니다. 오류는 모두 `{"error": "코드", "message": "안내 문구"}` 형식입니다. 전체 오류 코드와 상세 규칙은 [API 명세](docs/API.md)에 있습니다.
+
+**회원가입** `POST /api/auth/register` → `201 Created`
+
+```json
+{"email": "user@example.com", "password": "password1234"}
+```
+
+```json
+{"id": 1, "email": "user@example.com", "created_at": "2026-10-29T12:00:00Z"}
+```
+
+이미 가입된 이메일이면 `409 {"error": "EMAIL_EXISTS", "message": "이미 가입된 이메일입니다."}`입니다.
+
+**로그인** `POST /api/auth/login` → `200 OK` (응답 헤더에 `Set-Cookie: next_star_session=...`)
+
+```json
+{"email": "user@example.com", "password": "password1234"}
+```
+
+```json
+{"id": 1, "email": "user@example.com", "created_at": "2026-10-29T12:00:00Z"}
+```
+
+틀리면 `401 {"error": "INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호를 확인해주세요."}`입니다.
+
+**채팅** `POST /api/chat` → `200 OK`
+
+```json
+{"message": "안경을 쓴 부산 출신 아이돌을 추천해줘"}
+```
+
+```json
+{
+  "id": 7,
+  "question": "안경을 쓴 부산 출신 아이돌을 추천해줘",
+  "answer": "부산 출신 아이돌이라면 ○○를 추천해요. ...\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - ○○, △△",
+  "created_at": "2026-10-29T12:00:00Z",
+  "saved": true
+}
+```
+
+**대화 기록** `GET /api/me/chats?limit=2` → `200 OK`
+
+```json
+{
+  "items": [
+    {"id": 7, "question": "안경을 쓴 부산 출신 아이돌을 추천해줘", "answer": "부산 출신 아이돌이라면 ...", "created_at": "2026-10-29T12:00:00Z"},
+    {"id": 8, "question": "그중에서 배우 활동도 하는 사람은?", "answer": "배우 활동을 함께 하는 ...", "created_at": "2026-10-29T12:01:30Z"}
+  ]
+}
+```
+
+`ENABLE_API_DOCS=true`로 실행하면 `/docs`에서 Swagger로 요청·응답 예시를 직접 확인할 수 있습니다(운영에서는 끔).
+
+## 7. 인증과 대화 로그를 쓰는 이유
+
+**인증·인가가 필요한 이유**
+
+- 대화 기록은 사용자 개인의 취향이 담긴 데이터라서, 누가 남긴 기록인지 구분하고 본인 기록만 보여 줘야 합니다. `GET /api/me/chats`는 세션의 사용자 ID로만 조회하므로 다른 사람 기록은 볼 수 없습니다.
+- AI API 호출은 비용과 사용량 한도가 있는 자원이라, 가입한 사용자만 쓸 수 있게 막아 무분별한 호출을 줄입니다.
+- 계정당 세션을 하나로 제한해, 계정을 같이 쓰거나 다른 기기에 로그인해 둔 채 방치했을 때 누구의 대화인지 섞이지 않게 했습니다.
+- 그래서 로그인 확인을 `get_current_user` 의존성 하나로 만들어 채팅·기록·로그아웃·내 정보 API에 똑같이 붙였습니다.
+
+**대화 로그를 저장하는 이유**
+
+- **추적**: 문제가 생긴 답변을 사용자·시각으로 찾아 어떤 질문에서 나왔는지 확인합니다.
+- **운영**: 사용자별 이용량과 마지막 사용 시각을 보고 서비스가 실제로 쓰이는지 확인합니다(`scripts/check_logs.sql`).
+- **개선**: 자료를 찾지 못한 질문이나 엉뚱한 추천을 모아 검색 조건과 프롬프트를 고치는 근거로 씁니다.
+- **기능**: 저장된 최근 대화가 다음 질문의 문맥이 되고, 다시 접속했을 때 이전 대화를 보여 줍니다.
+
+## 8. 운영 로그와 AI 실패 처리
+
+서버는 표준 출력에 한 줄씩 로그를 남깁니다(Railway에서는 Deploy Logs에서 확인). 모든 요청에 요청 ID를 붙이고 응답 헤더 `X-Request-ID`로 돌려줘서, 사용자가 겪은 오류를 로그에서 찾을 수 있습니다. 질문·답변 내용, 비밀번호, API 키는 로그에 남기지 않습니다.
+
+| 이벤트 | 남는 때 |
+| --- | --- |
+| `request_received` | 모든 요청 수신 |
+| `login_success`, `session_replaced` | 로그인 성공, 다른 곳의 로그인으로 끊긴 세션의 요청 |
+| `star_search_done`, `star_search_failure` | 스타 자료 검색 결과 수·소요 시간, 검색 실패(채팅은 계속) |
+| `ai_call_start`, `ai_call_success`, `ai_call_failure` | AI 호출 시작, 성공(소요 시간), 실패(오류 코드·원인 종류) |
+| `db_save_success`, `db_save_failure` | 회원가입·대화 저장 성공, 대화 저장 실패 |
+| `db_operation_failure` | 그 밖의 DB 오류 |
+
+```text
+INFO next_star_hunter request_received method=POST path=/api/chat request_id=...
+INFO next_star_hunter star_search_done request_id=... hits=5 latency_ms=36
+INFO next_star_hunter ai_call_start user_id=12 request_id=...
+INFO next_star_hunter ai_call_success request_id=... latency_ms=1240
+INFO next_star_hunter db_save_success user_id=12 chat_id=987 request_id=...
+WARNING next_star_hunter ai_call_failure request_id=... error=AI_TIMEOUT reason=ReadTimeout
+```
+
+**AI 실패 처리 정책**
+
+| 상황 | 응답 | 채팅 화면 안내 |
+| --- | --- | --- |
+| `LLM_TIMEOUT_SECONDS`(기본 90초) 안에 응답이 없음 | `504 AI_TIMEOUT` | 현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요. |
+| AI API 오류 응답, 연결 실패, 응답 형식 오류 | `502 AI_ERROR` | AI 답변을 받지 못했어요. 잠시 후 다시 시도해 주세요. |
+| 서버에 AI 키·주소가 없음 | `503 AI_NOT_CONFIGURED` | AI 연결 설정이 아직 준비되지 않았어요. 관리자에게 알려 주세요. |
+| AI 답변은 받았지만 DB 저장 실패 | `200`, `saved: false` | 답변은 보여 주고 “이 대화는 저장되지 않았어요.” 안내를 붙입니다. |
+| 스타 자료 검색 실패·자료 없음 | 정상 진행 | 참고 자료 없이 답변합니다. |
+
+AI 서버가 보낸 오류 본문은 사용자에게 넘기지 않고 정해진 코드와 문구만 보냅니다. 화면에는 안내 문구와 오류 코드가 함께 나옵니다. 실패한 질문은 저장하지 않으며, 사용자는 같은 질문을 다시 보낼 수 있습니다. 서버 응답 문구는 [API 명세](docs/API.md)에 있습니다.
+
+## 9. DB 확인 방법
+
+- **API**: 로그인한 뒤 `GET /api/me/chats?limit=N`으로 본인 기록을 확인합니다. 브라우저에서는 채팅 화면을 열면 같은 API로 최근 기록이 나옵니다.
+- **SQL**: `scripts/check_logs.sql`에 사용자별 대화 수·마지막 대화 시각과, 한 사용자의 최근 20건(질문·답변 앞 50자)을 보는 쿼리가 있습니다.
+
+```bash
+psql "$DATABASE_URL" -v email='user@example.com' -f scripts/check_logs.sql
+```
+
+`psql`은 `postgresql://` 주소를 받으므로 `DATABASE_URL`이 `postgresql+psycopg://`로 시작하면 `+psycopg`를 빼고 넣습니다. 운영 DB는 Railway PostgreSQL 플러그인의 Connect 정보로 접속합니다. 자세한 내용은 [데이터베이스 문서](docs/DATABASE.md#대화-로그-확인-방법)에 있습니다.
 
 ## 실행 및 환경 변수
 
