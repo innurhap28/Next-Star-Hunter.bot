@@ -11,6 +11,6 @@ ignore = ["B008"]
 known-first-party = ["app"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "test"]
+testpaths = ["tests"]
 pythonpath = ["backend", "."]
 addopts = "-q"

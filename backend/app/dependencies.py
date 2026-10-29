@@ -1,19 +1,26 @@
 """Shared authentication and request-scoped database sessions."""
 from fastapi import Depends, HTTPException, Request
+
 from .database import build_engine, build_session_factory
 from .models import User
 
+
 def require_auth_configuration(request: Request):
     if not request.app.state.settings.auth_configured():
-        raise HTTPException(503, {"error": "AUTH_NOT_CONFIGURED", "message": "서버 인증 설정을 확인해주세요."})
+        raise HTTPException(
+            503, {"error": "AUTH_NOT_CONFIGURED", "message": "서버 인증 설정을 확인해주세요."}
+        )
 
 def get_db(request: Request, _=Depends(require_auth_configuration)):
     if request.app.state.session_factory is None:
         try:
-            request.app.state.engine = build_engine(request.app.state.settings.DATABASE_URL.get_secret_value())
+            url = request.app.state.settings.DATABASE_URL.get_secret_value()
+            request.app.state.engine = build_engine(url)
             request.app.state.session_factory = build_session_factory(request.app.state.engine)
         except ValueError:
-            raise HTTPException(503, {"error": "DB_NOT_CONFIGURED", "message": "서버 DB 설정을 확인해주세요."}) from None
+            raise HTTPException(
+                503, {"error": "DB_NOT_CONFIGURED", "message": "서버 DB 설정을 확인해주세요."}
+            ) from None
     with request.app.state.session_factory() as session:
         try:
             yield session

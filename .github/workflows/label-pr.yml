@@ -1,7 +1,7 @@
 name: PR 라벨 자동화
 
 # 주의: 이 워크플로는 PR 코드를 절대 체크아웃하지 않는다(pull_request_target + 신뢰할 수 없는 코드 금지).
-# 라벨은 Task 1에서 미리 생성하므로 issues: write 는 필요 없다(issues.setLabels 는 pull-requests: write 로도 허용).
+# 라벨은 저장소에 미리 만들어 두었으므로 issues: write 권한은 필요 없다.
 # sync-labels 는 false: 경로 규칙이 못 잡는 변경에서 사람이 붙인 area:* 라벨까지 지우는 것을 막는다.
 
 on:

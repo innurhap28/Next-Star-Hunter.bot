@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from app.config import Settings
 from app.database import Base
 from app.main import create_app
@@ -19,10 +20,17 @@ ACCOUNT = {"email": "tester@example.com", "password": "safe-test-password-123"}
 
 @pytest.fixture
 def setup():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
-    settings = Settings(_env_file=None, SECRET_KEY="test-only-signing-secret-at-least-32-characters", DATABASE_URL="postgresql+psycopg://unused:unused@localhost/test", SESSION_HTTPS_ONLY=True)
+    settings = Settings(
+        _env_file=None,
+        SECRET_KEY="test-only-signing-secret-at-least-32-characters",
+        DATABASE_URL="postgresql+psycopg://unused:unused@localhost/test",
+        SESSION_HTTPS_ONLY=True,
+    )
     with TestClient(create_app(settings, factory), base_url="https://testserver") as client:
         yield client, factory
     engine.dispose()
@@ -51,9 +59,13 @@ def test_register_login_me_and_logout(setup):
 def test_duplicate_email_is_case_insensitive(setup):
     client, _ = setup
     assert client.post("/api/auth/register", json=ACCOUNT).status_code == 201
-    assert client.post("/api/auth/register", json={**ACCOUNT, "email": "TESTER@EXAMPLE.COM"}).status_code == 409
+    duplicate = {**ACCOUNT, "email": "TESTER@EXAMPLE.COM"}
+    assert client.post("/api/auth/register", json=duplicate).status_code == 409
 
-@pytest.mark.parametrize("email,password", [("missing@example.com", ACCOUNT["password"]), (ACCOUNT["email"], "wrong-password-123")])
+@pytest.mark.parametrize(
+    "email,password",
+    [("missing@example.com", ACCOUNT["password"]), (ACCOUNT["email"], "wrong-password-123")],
+)
 def test_failed_login_is_generic(setup, email, password):
     client, _ = setup
     client.post("/api/auth/register", json=ACCOUNT)
@@ -81,7 +93,8 @@ def test_different_origin_login_is_blocked(setup):
     client, _ = setup
     r = client.post("/api/auth/register", json=ACCOUNT, headers={"Origin":"https://untrusted.example"})
     assert r.status_code == 403
-    assert client.post("/api/auth/register", json=ACCOUNT, headers={"Origin":"https://testserver"}).status_code == 201
+    trusted = {"Origin": "https://testserver"}
+    assert client.post("/api/auth/register", json=ACCOUNT, headers=trusted).status_code == 201
 
 def test_database_failure_is_safe_and_health_survives(setup, monkeypatch):
     client, factory = setup
@@ -125,4 +138,5 @@ def test_request_ids_and_no_password_logs(setup, caplog):
 
 def test_malformed_origin_does_not_crash(setup):
     client, _ = setup
-    assert client.post("/api/auth/register", json=ACCOUNT, headers={"Origin":"https://["}).status_code == 403
+    malformed = {"Origin": "https://["}
+    assert client.post("/api/auth/register", json=ACCOUNT, headers=malformed).status_code == 403
