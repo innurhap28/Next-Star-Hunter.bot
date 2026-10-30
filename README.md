@@ -11,7 +11,7 @@
 - 문제 정의: 관심 가는 스타를 출신 지역, 데뷔 시기, 그룹, 외모 같은 조건을 섞어 찾고 싶지만, 검색창에 조건을 하나씩 넣어서는 찾기 어렵습니다.
 - 대상 사용자: 새로 좋아할 아이돌, 가수, 배우를 취향에 맞춰 찾아보고 싶은 사용자
 - 핵심 시나리오: 회원가입, 로그인, 조건으로 질문, 추천과 이유 확인, 앞의 조건을 이어서 후속 질문, 다시 접속해 이전 대화 확인
-- 주요 기능: 이메일 회원가입과 로그인, 계정당 로그인 세션 하나, 스타 자료 검색과 한 명 추천(맨 위 이름 표시, 반말 답변), 출처 표시, 최근 대화 5쌍을 이용한 문맥 유지, 내 대화 기록 조회와 삭제, 관리자 계정의 가입자·대화 조회, AI 지연·실패 안내
+- 주요 기능: 이메일 회원가입과 로그인(비밀번호 확인), 계정당 로그인 세션 하나와 다른 곳 로그인 안내, 스타 자료 검색과 한 명 추천(맨 위 이름 제목, 반말 답변), 오늘의 랜덤 스타, 출처 표시, 대화방 단위 저장과 같은 방 최근 대화 5쌍을 이용한 문맥 유지, 대화방 목록·열기·삭제, 답변 대기 표시(스피너와 바뀌는 문구), 관리자 화면(통계, 사용자 목록, 사용자별 대화), 모바일 화면, AI 지연·실패 안내
 
 ## 기술 스택
 
@@ -29,45 +29,79 @@
 
 ## 화면
 
+화면 캡처는 `develop`(c6d8275)을 로컬에서 실행하고 실제 AI에 연결해 찍었습니다. 답변 내용은 질문할 때마다 달라질 수 있습니다.
+
 ### 로그인과 회원가입
 
 ![로그인](docs/images/login.png)
 
-이메일과 비밀번호(8~128자)로 가입하고 로그인합니다. 가입할 때는 비밀번호 확인란이 같아야 하며(브라우저에서만 확인), 화면 아래에 스타 정보 출처(나무위키, CC BY-NC-SA 2.0 KR)를 표시합니다. 로그인하지 않고 채팅 화면(`/`)에 들어오면 이 화면(`/auth`)으로 이동합니다.
+이메일과 비밀번호(8~128자)로 가입하고 로그인합니다. 화면 아래에 스타 정보 출처(나무위키, CC BY-NC-SA 2.0 KR)를 표시합니다. 로그인하지 않고 채팅 화면(`/`)에 들어오면 이 화면(`/auth`)으로 이동합니다.
+
+![비밀번호 확인 불일치](docs/images/signup-mismatch.png)
+
+회원가입 탭에는 비밀번호 확인란이 있습니다. 두 값이 다르면 가입 요청을 보내지 않고 "비밀번호가 서로 달라요. 같은 비밀번호를 다시 입력해 주세요."를 표시한 뒤 확인란으로 포커스를 옮깁니다. 이 확인은 브라우저에서만 하고, API에는 비밀번호 확인 값을 보내지 않습니다.
 
 ### 채팅
 
 ![빈 채팅 화면](docs/images/chat-empty.png)
 
-처음 화면에는 추천 질문 버튼이 있습니다. 버튼을 누르면 정해 둔 질문을 그대로 보냅니다. 왼쪽 최근 대화는 대화방 목록입니다(`GET /api/me/conversations`). 대화방마다 제목(첫 질문)과 마지막 대화 시각("5분 전" 등)이 보이고, 마지막으로 대화한 방이 맨 위에 옵니다. 항목을 누르면 그 방의 질문과 답변을 불러오고(`GET /api/me/conversations/{id}/chats`), 지금 연 방은 목록에서 강조됩니다. 새 대화 버튼은 화면을 비우고, 그다음 질문을 보내면 서버가 새 대화방을 만듭니다. 이어지는 질문은 같은 방 안의 대화만 문맥으로 씁니다.
+처음 화면에는 추천 질문 버튼 세 개(안경이 잘 어울리는 아이돌, 부산 출신 배우 찾아보기, 오늘의 랜덤 스타)가 있고, 버튼을 누르면 정해 둔 질문을 그대로 보냅니다. 대화방이 아직 없으면 왼쪽 최근 대화에 "질문을 보내면 대화방이 여기에 생겨요."가 보입니다.
 
-대화방 항목 옆 `×` 버튼은 확인을 거쳐 그 방과 안의 대화를 모두 지웁니다(`DELETE /api/me/conversations/{id}`). 마지막으로 연 대화방은 브라우저에 기억해 두었다가 새로고침하면 다시 열고, 그 방이 없어졌으면 가장 최근 방을 엽니다. 사이드바 오른쪽 가장자리를 끌거나(마우스·터치) 포커스한 뒤 방향키로 너비를 200~480px 사이에서 바꿀 수 있고, 바꾼 너비는 브라우저에 기억됩니다(모바일 화면에서는 숨김). 왼쪽 아래 프로필을 누르면 이메일, 로그아웃, 관리자 계정일 때만 `관리자 페이지` 링크가 있는 메뉴가 열립니다. 화면 아래에는 나무위키와 CC BY-NC-SA 2.0 KR 라이선스 링크를 담은 출처 문구가 있습니다.
+![답변 대기 스피너](docs/images/loading-spinner.png)
+
+![답변 대기 문구](docs/images/loading-text.png)
+
+질문을 보내면 답변 자리에 스피너와 "답변을 준비하고 있어요…"가 나옵니다. 3초가 지나도 답이 없으면 이 문구가 사라지고, 미리 정해 둔 문구 중 하나가 3초마다 바뀌어 나옵니다(바로 앞과 같은 문구는 다시 고르지 않습니다). 일부 문구에는 사용자 이름(이메일의 `@` 앞부분, 위 캡처의 `minji`)이 들어갑니다. 답변이 오거나 오류가 나면 바로 멈춥니다. 두 번째 캡처는 문구가 바뀐 상태를 찍으려고 AI 주소를 응답하지 않는 로컬 주소로 바꿔 찍었습니다.
 
 ![채팅 답변](docs/images/chat-answer.png)
 
-서버가 질문 속 조건(부산 출신, 아이돌)으로 스타 자료를 찾아 AI에 넘기고, 나머지 단어(안경)는 찾은 스타의 문서 본문에서 찾습니다. 찾은 스타 중 한 명을 무작위로 골라 그 자료만 AI에 넘기고, AI는 친구에게 말하듯 반말로 추천 이유를 설명합니다. 서버가 답변 맨 위에 `˗ˋˏ 이름 ˎˊ˗` 줄을, 마지막 줄에 출처를 붙이고, 화면은 이 이름 줄을 답변 위 가운데에 큰 글씨 제목으로 보여 줍니다(지난 기록도 같습니다).
+서버가 질문 속 조건(부산 출신, 아이돌)으로 스타 자료를 찾고, 나머지 단어(안경)는 찾은 스타의 문서 본문에서 찾습니다. 찾은 스타 중 한 명을 무작위로 골라 그 자료만 AI에 넘기고, AI는 친구에게 말하듯 반말로 추천 이유를 설명합니다. 서버가 답변 맨 위에 `˗ˋˏ 이름 ˎˊ˗` 줄을, 마지막 줄에 출처를 붙이고, 화면은 이 이름 줄을 답변 위 가운데에 큰 글씨 제목으로 보여 줍니다(지난 기록과 관리자 화면도 같습니다).
 
 ### 후속 질문(문맥 유지)
 
 ![후속 질문](docs/images/chat-followup.png)
 
-"그중에"처럼 조건 없이 이어지는 질문은 같은 사용자의 최근 대화 5쌍을 함께 보내 앞의 추천을 기준으로 답합니다. "그 사람 어떤 그룹이야?"처럼 앞서 추천한 사람을 가리키면 같은 사람으로 답하고, "다른 사람"을 원하면 이미 추천한 사람을 빼고 새로 고릅니다. "오늘의 랜덤 스타"처럼 조건 없이 아무나 원하면 스타 자료에서 한 명을 무작위로 골라 추천합니다. 자료에서 확인되지 않는 내용은 확인하지 못했다고 답합니다.
+같은 대화방에서 이어지는 질문은 그 방의 최근 대화 5쌍을 함께 보내 앞의 추천을 기준으로 답합니다. "그 사람 어떤 그룹 출신이야?"처럼 앞서 추천한 사람을 가리키면 같은 사람으로 답하고, 앞 질문에서 쓴 자료 문단(위 예에서는 안경 관련 문단)도 계속 함께 넘깁니다. "다른 사람"을 원하면 이 대화방에서 이미 추천한 사람을 빼고 새로 고릅니다. 자료에서 확인되지 않는 내용은 확인하지 못했다고 답합니다.
+
+### 오늘의 랜덤 스타
+
+![랜덤 추천](docs/images/chat-random.png)
+
+"오늘의 랜덤 스타를 추천해줘"처럼 조건 없이 아무나 원하면 스타 자료에서 한 명을 무작위로 골라 추천합니다. 위 캡처는 새 대화 버튼을 누른 뒤 보낸 질문이라 왼쪽 목록에 대화방이 하나 더 생겼습니다.
+
+### 대화방 목록과 계정 메뉴
+
+![계정 메뉴](docs/images/account-menu.png)
+
+왼쪽 최근 대화는 대화방 목록입니다(`GET /api/me/conversations`). 대화방마다 제목(첫 질문 앞 40자)과 마지막 대화 시각("방금 전", "5분 전" 등)이 보이고, 마지막으로 대화한 방이 맨 위에 옵니다. 항목을 누르면 그 방의 질문과 답변을 불러오고(`GET /api/me/conversations/{id}/chats`), 지금 연 방은 목록에서 강조됩니다. 새 대화 버튼은 화면을 비우고, 그다음 질문을 보내면 서버가 새 대화방을 만듭니다.
+
+대화방 항목 옆 `×` 버튼은 확인을 거쳐 그 방과 안의 대화를 모두 지웁니다(`DELETE /api/me/conversations/{id}`). 마지막으로 연 대화방은 브라우저에 기억해 두었다가 새로고침하면 다시 열고, 그 방이 없어졌으면 가장 최근 방을 엽니다. 사이드바 오른쪽 가장자리를 끌거나(마우스·터치) 포커스한 뒤 방향키로 너비를 200~480px 사이에서 바꿀 수 있고, 바꾼 너비는 브라우저에 기억됩니다. 왼쪽 아래 프로필을 누르면 이메일과 로그아웃, 관리자 계정일 때만 `관리자 페이지` 링크가 있는 메뉴가 열립니다. 화면 아래에는 나무위키와 CC BY-NC-SA 2.0 KR 라이선스 링크를 담은 출처 문구가 있습니다.
 
 ### 다른 곳 로그인 안내
 
 ![다른 곳 로그인 안내](docs/images/session-replaced.png)
 
-같은 계정으로 다른 브라우저에서 로그인하면 이전 브라우저의 다음 API 요청이 `401 SESSION_REPLACED`를 받고, 화면이 바로 `/auth?reason=session_replaced`로 이동해 안내 문구를 보여 줍니다. 이전 브라우저에서 페이지를 새로 열어도(`GET /`) 같은 화면으로 이동합니다.
+같은 계정으로 다른 브라우저에서 로그인하면 이전 브라우저의 다음 API 요청이 `401 SESSION_REPLACED`를 받고, 화면이 바로 `/auth?reason=session_replaced`로 이동해 "다른 곳에서 로그인되어 로그아웃되었어요. 다시 로그인해 주세요."를 보여 줍니다. 이전 브라우저에서 페이지를 새로 열어도(`GET /`) 같은 화면으로 이동합니다.
 
 ### 관리자 화면
 
-`ADMIN_EMAIL` 계정으로 로그인한 뒤 `/admin`을 열면 가입자 수·전체 대화 수·오늘 대화 수, 사용자 목록(가입일, 대화 수, 마지막 대화)을 볼 수 있습니다. 사용자를 누르면 그 사용자의 질문과 답변이 나오고, "전체 최근 대화 보기"로 모든 사용자의 최근 대화로 돌아갑니다. 일반 사용자가 열면 채팅 화면으로 이동합니다.
+![관리자 화면](docs/images/admin.png)
 
-### AI 응답 지연 안내
+`ADMIN_EMAIL` 계정으로 로그인한 뒤 `/admin`을 열면 가입자 수·전체 대화 수·오늘 대화 수, 사용자 목록(가입일, 대화 수, 마지막 대화)과 전체 사용자의 최근 대화를 볼 수 있습니다. 로그인하지 않았으면 `/auth`로, 일반 사용자면 채팅 화면으로 이동합니다.
 
-![AI 응답 지연](docs/images/ai-timeout.png)
+![사용자별 대화](docs/images/admin-user-chats.png)
 
-AI가 `LLM_TIMEOUT_SECONDS` 안에 답하지 않으면 `504 AI_TIMEOUT`을 받아 안내 문구와 오류 코드를 표시하고, 보낸 질문을 입력창에 다시 넣어 바로 재전송할 수 있게 합니다. 실패한 질문은 저장하지 않습니다.
+사용자 목록에서 이메일을 누르면 그 행이 강조되고 아래에 그 사용자의 질문과 답변이 나옵니다. "전체 최근 대화 보기"를 누르면 모든 사용자의 최근 대화로 돌아갑니다.
+
+### 모바일
+
+![모바일 화면](docs/images/mobile.png)
+
+화면 폭이 720px 이하이면 사이드바가 화면 밖으로 숨고, 왼쪽 위 메뉴 버튼으로 열고 닫습니다. 열어 둔 상태는 브라우저에 기억해 새로고침해도 유지하고, 사이드바 너비 조절은 쓰지 않습니다. 관리자 화면은 통계 카드를 한 줄에 하나씩 놓습니다.
+
+### AI 응답 지연과 오류
+
+AI가 `LLM_TIMEOUT_SECONDS` 안에 답하지 않으면 `504 AI_TIMEOUT`을 받아 대기 표시를 지우고 "현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요. (error: AI_TIMEOUT)"처럼 안내 문구와 오류 코드를 오류 메시지로 표시하며, 보낸 질문을 입력창에 다시 넣어 바로 재전송할 수 있게 합니다. 실패한 질문은 저장하지 않습니다. 이때 남는 서버 로그는 [서버 로그와 오류 추적](#타임아웃)에 있습니다.
 
 ## 시스템 구조
 
@@ -217,6 +251,9 @@ erDiagram
 | GET | `/api/me/conversations` | 필요 | 내 대화방 목록, 최근 순 (`limit` 1~100, 기본 50) |
 | GET | `/api/me/conversations/{conversation_id}/chats` | 필요 | 대화방 하나의 대화 전체, 오래된 순 |
 | DELETE | `/api/me/conversations/{conversation_id}` | 필요 | 대화방과 그 안의 대화 삭제 |
+| GET | `/api/admin/stats` | 관리자 | 가입자 수, 전체·오늘 대화 수 |
+| GET | `/api/admin/users` | 관리자 | 가입자 목록과 사용자별 대화 수 (`limit` 1~100, 기본 50, `offset`) |
+| GET | `/api/admin/chats` | 관리자 | 전체 또는 한 사용자(`user_id`)의 최근 대화 (`limit` 1~100, 기본 50) |
 
 로그인하면 `next_star_session` 쿠키(HttpOnly, SameSite=Lax, 8시간)가 발급되고, 로그인이 필요한 API는 이 쿠키로 사용자를 확인합니다. 오류는 모두 `{"error": "코드", "message": "안내 문구"}` 형식이며, 모든 응답에 요청 ID가 `X-Request-ID` 헤더로 붙습니다.
 
@@ -235,51 +272,81 @@ AI 호출이 실패한 질문은 저장하지 않습니다. AI 답변은 받았�
 `scripts/check_logs.sql`에는 사용자별 대화 수와 마지막 대화 시각, 그리고 한 사용자의 최근 20건(질문과 답변은 앞 50자)을 조회하는 쿼리가 있습니다. `psql`은 `postgresql://` 주소를 받으므로 `DATABASE_URL`이 `postgresql+psycopg://`로 시작하면 `+psycopg`를 빼고 넣습니다. 운영 DB는 Railway PostgreSQL의 연결 정보로 접속합니다.
 
 ```bash
-psql "postgresql://<사용자>:<비밀번호>@<호스트>:<포트>/<DB>" -v email='demo.user@example.com' -f scripts/check_logs.sql
+psql "postgresql://<사용자>:<비밀번호>@<호스트>:<포트>/<DB>" -v email='minji@example.com' -f scripts/check_logs.sql
 ```
 
-화면 캡처의 두 질문이 저장된 시연용 DB에서 위 명령을 실행한 실제 출력입니다. 첫 번째는 사용자별 대화 수, 두 번째는 지정한 사용자의 최근 기록(질문·답변 앞 50자)입니다.
+화면 캡처를 찍은 로컬 DB에서 위 명령을 실행한 실제 출력입니다. 첫 번째는 사용자별 대화 수(관리자 계정 포함), 두 번째는 지정한 사용자의 최근 기록(질문·답변 앞 50자)입니다. 답변이 이름 제목 줄로 시작하므로 `answer` 칸에 줄바꿈(`+`)이 보입니다. 시각은 UTC입니다.
 
 ```
- user_id |         email         | chat_count |         last_chat_at
----------+-----------------------+------------+-------------------------------
-       1 | demo.user@example.com |          2 | 2026-10-29 22:52:15.292162+00
-(1 row)
-
- id |          created_at           |                 question                 |                                        answer
-----+-------------------------------+------------------------------------------+--------------------------------------------------------------------------------------
-  2 | 2026-10-29 22:52:15.292162+00 | 그중에 제일 최근에 데뷔한 사람은 누구야? | 자료에서 확인되는 데뷔 연도를 보면 조유리가 2018년으로 셋 중 가장 최근에 데뷔했어요.
-  1 | 2026-10-29 22:52:10.866235+00 | 안경 쓴 부산 출신 아이돌 추천해줘        | 부산 출신에 안경 착용으로 유명한 분들이 자료에 몇 명 있어요. 조유리는 IZ*ONE 출신
+ user_id |         email          | chat_count |         last_chat_at          
+---------+------------------------+------------+-------------------------------
+       1 | admin.demo@example.com |          0 | 
+       2 | minji@example.com      |          3 | 2026-10-30 02:14:45.536645+00
 (2 rows)
+
+ id |          created_at           |             question              |                             answer                             
+----+-------------------------------+-----------------------------------+----------------------------------------------------------------
+  3 | 2026-10-30 02:14:45.536645+00 | 오늘의 랜덤 스타를 추천해줘       | ˗ˋˏ 김동윤 ˎˊ˗                                                +
+    |                               |                                   |                                                               +
+    |                               |                                   | 오늘의 랜덤 스타는 그룹 스펙트럼 출신의 김동윤이야 😊 1998년생
+  2 | 2026-10-30 02:14:39.310532+00 | 그 사람 어떤 그룹 출신이야?       | ˗ˋˏ 강혜원 ˎˊ˗                                                +
+    |                               |                                   |                                                               +
+    |                               |                                   | IZ*ONE 출신이야! 2018년에 엠넷 서바이벌 오디션 프로듀스 
+  1 | 2026-10-30 02:14:34.985999+00 | 안경 쓴 부산 출신 아이돌 추천해줘 | ˗ˋˏ 강혜원 ˎˊ˗                                                +
+    |                               |                                   |                                                               +
+    |                               |                                   | 강혜원 어때? 😊 IZ*ONE 멤버인데 부산 출신이고, 근시가 -1
+(3 rows)
 ```
 
 ### API로 확인하기
 
-로그인 응답으로 받은 세션 쿠키를 저장해 두고, 그 쿠키로 내 대화 기록을 조회합니다. `limit`(1~100, 기본 20)만큼 최신 기록을 가져와 오래된 순서로 돌려줍니다.
+로그인 응답으로 받은 세션 쿠키를 저장해 두고, 그 쿠키로 내 대화방 목록과 대화 기록을 조회합니다. `/api/me/chats`는 대화방과 상관없이 `limit`(1~100, 기본 20)만큼 최신 기록을 가져와 오래된 순서로 돌려줍니다.
 
 ```bash
 BASE=https://next-star-hunter-production.up.railway.app
 curl -s -c cookies.txt -H 'Content-Type: application/json' \
   -d '{"email":"<이메일>","password":"<비밀번호>"}' "$BASE/api/auth/login"
+curl -s -b cookies.txt "$BASE/api/me/conversations"
 curl -s -b cookies.txt "$BASE/api/me/chats?limit=2"
 ```
 
-응답 예시입니다. 긴 답변은 줄였습니다.
+위 SQL 출력과 같은 로컬 DB에서 받은 실제 응답입니다. 대화방 목록은 마지막 대화가 최근인 방부터 옵니다.
 
 ```json
 {
   "items": [
     {
-      "id": 1,
-      "question": "안경 쓴 부산 출신 아이돌 추천해줘",
-      "answer": "부산 출신에 안경 착용으로 유명한 분들이 자료에 몇 명 있어요. 조유리는 IZ*ONE 출신으로 부산 남구 태생인데, (생략)\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 조유리, 강혜원, 산들",
-      "created_at": "2026-10-30T07:41:15.917402Z"
+      "id": 2,
+      "title": "오늘의 랜덤 스타를 추천해줘",
+      "created_at": "2026-10-30T02:14:45.536645Z",
+      "updated_at": "2026-10-30T02:14:45.536645Z",
+      "chat_count": 1
     },
     {
+      "id": 1,
+      "title": "안경 쓴 부산 출신 아이돌 추천해줘",
+      "created_at": "2026-10-30T02:14:34.985999Z",
+      "updated_at": "2026-10-30T02:14:39.310532Z",
+      "chat_count": 2
+    }
+  ]
+}
+```
+
+```json
+{
+  "items": [
+    {
       "id": 2,
-      "question": "그중에 제일 최근에 데뷔한 사람은 누구야?",
-      "answer": "자료에서 확인되는 데뷔 연도를 보면 조유리가 2018년으로 셋 중 가장 최근에 데뷔했어요. (생략)\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 조유리, 산들",
-      "created_at": "2026-10-30T07:42:19.508113Z"
+      "question": "그 사람 어떤 그룹 출신이야?",
+      "answer": "˗ˋˏ 강혜원 ˎˊ˗\n\nIZ*ONE 출신이야! 2018년에 엠넷 서바이벌 오디션 프로듀스 48을 통해 선발돼서 데뷔했고, 2021년 4월까지 활동했어 🎤\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 강혜원",
+      "created_at": "2026-10-30T02:14:39.310532Z"
+    },
+    {
+      "id": 3,
+      "question": "오늘의 랜덤 스타를 추천해줘",
+      "answer": "˗ˋˏ 김동윤 ˎˊ˗\n\n오늘의 랜덤 스타는 그룹 스펙트럼 출신의 김동윤이야 😊 1998년생으로 2018년에 데뷔했고, 키 180cm에 비주얼도 좋다고 알려진 래퍼야. 믹스나인에 참가해서 데뷔 전부터 팬층이 생겼을 만큼 일찍부터 주목받은 친구야. 처음엔 별 관심 없이 연습생을 시작했다가 선배들의 무대를 보고 가수의 꿈을 키웠다는 스토리도 꽤 인상적이지 않아?\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 김동윤(1998)",
+      "created_at": "2026-10-30T02:14:45.536645Z"
     }
   ]
 }
@@ -297,13 +364,16 @@ curl -s -b cookies.txt "$BASE/api/me/chats?limit=2"
 | `login_success` | 로그인 성공 | `user_id`, `request_id` |
 | `session_replaced` | 다른 곳의 로그인으로 끊긴 세션의 요청 | `user_id`, `request_id` |
 | `chat_deleted` | 내 대화 한 건 삭제 | `user_id`, `chat_id`, `request_id` |
+| `conversation_deleted` | 내 대화방 삭제 | `user_id`, `conversation_id`, `request_id` |
 | `admin_view` | 관리자 API 조회 (조회한 데이터는 남기지 않음) | `user_id`, `path`, `request_id` |
+| `star_pick` | 추천할 스타를 고르는 방식 결정. `mode`는 `search`(조건 검색), `same`·`same_unless_named`(앞서 추천한 사람), `similar`(비슷한 사람), `another`(다른 사람), `random`(랜덤) | `request_id`, `mode` |
 | `star_search_done` | 스타 자료 검색 완료 | `request_id`, `hits`, `latency_ms` |
 | `star_search_failure` | 스타 자료 검색 실패 (채팅은 참고 자료 없이 계속) | `request_id`, `error_type` |
+| `star_lookup_failure` | 후속 질문의 앞 스타 자료나 스타 이름 확인 실패 (채팅은 계속) | `request_id`, `error_type` |
 | `ai_call_start` | AI API 호출 직전 | `user_id`, `request_id` |
 | `ai_call_success` | AI 답변 수신 | `request_id`, `latency_ms` |
 | `ai_call_failure` | AI 시간 초과, 오류 응답, 연결 실패, 설정 누락 | `request_id`, `error`, `reason` |
-| `db_save_success` | 회원가입(`action=register`), 대화 저장 | `user_id`, `chat_id`, `request_id` |
+| `db_save_success` | 회원가입(`action=register`), 대화 저장 | `user_id`, `chat_id`, `conversation_id`, `request_id` (회원가입은 `chat_id`, `conversation_id` 없음) |
 | `db_save_failure` | 대화 저장 실패 (답변은 `saved: false`로 반환) | `user_id`, `request_id`, `error_type` |
 | `db_operation_failure` | 그 밖의 DB 오류 (`503 DB_UNAVAILABLE`) | `request_id`, `error_type` |
 | `star_search_fallback_timeout` | 드문 단어의 전체 조각 검색이 제한 시간(150ms)을 넘겨 못 찾은 것으로 처리 | 없음 |
@@ -323,45 +393,71 @@ curl -s -b cookies.txt "$BASE/api/me/chats?limit=2"
 | 503 | `DB_UNAVAILABLE` | 최근 대화 조회 등 DB 요청 실패 | 서버 저장소에 연결할 수 없어요. 잠시 후 다시 시도해 주세요. |
 | 504 | `AI_TIMEOUT` | AI가 `LLM_TIMEOUT_SECONDS`(기본 90초) 안에 답하지 않음 | 현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요. |
 
-AI 서버가 보낸 오류 본문은 사용자에게 넘기지 않고 정해진 코드와 문구만 보냅니다. 화면은 안내 문구 뒤에 `(error: AI_TIMEOUT)`처럼 오류 코드를 함께 표시합니다. 계정 API의 오류(`EMAIL_EXISTS`, `INVALID_CREDENTIALS`, `ORIGIN_NOT_ALLOWED`, `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`)는 [docs/API.md](docs/API.md#오류-응답)에 있습니다.
+AI 서버가 보낸 오류 본문은 사용자에게 넘기지 않고 정해진 코드와 문구만 보냅니다. 화면은 안내 문구 뒤에 `(error: AI_TIMEOUT)`처럼 오류 코드를 함께 표시합니다. 그 밖의 오류(`EMAIL_EXISTS`, `INVALID_CREDENTIALS`, `ORIGIN_NOT_ALLOWED`, `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `CHAT_NOT_FOUND`, `CONVERSATION_NOT_FOUND`, `ADMIN_REQUIRED`)는 [docs/API.md](docs/API.md#오류-응답)에 있습니다.
 
-아래는 `LOG_FILE_PATH`를 지정하지 않고 로컬에서 서버를 실행했을 때 표준 출력에 남은 로그의 일부(로컬 실행 로그 일부)입니다. 정적 파일 요청 같은 관련 없는 줄은 뺐고 나머지는 그대로입니다. 요청 ID와 시각, 소요 시간은 실행마다 다릅니다.
+아래는 화면 캡처를 찍을 때 `LOG_FILE_PATH`를 지정하지 않고 로컬에서 서버를 실행해 표준 출력에 남은 로그입니다. 각 블록은 필요한 줄만 골랐고 줄 내용은 그대로입니다. 요청 ID와 시각, 소요 시간은 실행마다 다릅니다.
 
 ### 정상 응답
 
-질문 하나의 `request_id`로 그 요청의 로그만 골라 본 것입니다. 로그 파일을 쓸 때는 `grep <request_id> logs/app.log`로 같은 결과를 얻습니다.
+질문 하나의 `request_id`로 그 요청의 로그만 골라 본 것입니다. 로그 파일을 쓸 때는 `grep <request_id> logs/app.log`로 같은 결과를 얻습니다. `db_save_success`의 `chat_id=1`, `conversation_id=1`이 위 SQL 출력의 `id` 1번 행과 대화방 1번입니다.
 
 ```
-2026-10-30 07:52:03,543 INFO next_star_hunter request_received method=POST path=/api/chat request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab
-2026-10-30 07:52:03,605 INFO next_star_hunter star_search_done request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab hits=5 latency_ms=54
-2026-10-30 07:52:03,605 INFO next_star_hunter ai_call_start user_id=1 request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab
-2026-10-30 07:52:10,865 INFO next_star_hunter ai_call_success request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab latency_ms=7260
-2026-10-30 07:52:10,870 INFO next_star_hunter db_save_success user_id=1 chat_id=1 request_id=e127d77f-839f-42c7-96cb-08f3ae01dfab
+2026-10-30 11:14:31,375 INFO next_star_hunter request_received method=POST path=/api/chat request_id=0197697f-6cef-461c-9615-1c502abd7f95
+2026-10-30 11:14:31,379 INFO next_star_hunter star_pick request_id=0197697f-6cef-461c-9615-1c502abd7f95 mode=search
+2026-10-30 11:14:31,430 INFO next_star_hunter star_search_done request_id=0197697f-6cef-461c-9615-1c502abd7f95 hits=5 latency_ms=51
+2026-10-30 11:14:31,430 INFO next_star_hunter ai_call_start user_id=2 request_id=0197697f-6cef-461c-9615-1c502abd7f95
+2026-10-30 11:14:34,985 INFO next_star_hunter ai_call_success request_id=0197697f-6cef-461c-9615-1c502abd7f95 latency_ms=3555
+2026-10-30 11:14:35,001 INFO next_star_hunter db_save_success user_id=2 chat_id=1 conversation_id=1 request_id=0197697f-6cef-461c-9615-1c502abd7f95
+```
+
+이어서 보낸 후속 질문("그 사람 어떤 그룹 출신이야?")은 `mode=same`으로 앞서 추천한 사람의 자료를 다시 읽으므로 `star_search_done`이 없고, 같은 대화방(`conversation_id=1`)에 저장됩니다.
+
+```
+2026-10-30 11:14:37,155 INFO next_star_hunter request_received method=POST path=/api/chat request_id=2f45731d-d63c-4466-8f0e-6b4babea72fa
+2026-10-30 11:14:37,170 INFO next_star_hunter star_pick request_id=2f45731d-d63c-4466-8f0e-6b4babea72fa mode=same
+2026-10-30 11:14:37,170 INFO next_star_hunter ai_call_start user_id=2 request_id=2f45731d-d63c-4466-8f0e-6b4babea72fa
+2026-10-30 11:14:39,310 INFO next_star_hunter ai_call_success request_id=2f45731d-d63c-4466-8f0e-6b4babea72fa latency_ms=2139
+2026-10-30 11:14:39,323 INFO next_star_hunter db_save_success user_id=2 chat_id=2 conversation_id=1 request_id=2f45731d-d63c-4466-8f0e-6b4babea72fa
 ```
 
 ### 타임아웃
 
-AI 서버에 연결하지 못하고 시간이 초과되어 `504 AI_TIMEOUT`을 돌려준 요청입니다. 질문은 저장하지 않으므로 `db_save_success`가 없습니다.
+AI가 답하지 않아 `504 AI_TIMEOUT`을 돌려준 요청입니다. 같은 코드로 로컬에서 `LLM_TIMEOUT_SECONDS=5`, AI 주소를 응답하지 않는 로컬 주소로 두고 실행해 남긴 로그입니다. 질문은 저장하지 않으므로 `db_save_success`가 없습니다.
 
 ```
-2026-10-30 07:52:18,618 INFO next_star_hunter request_received method=POST path=/api/chat request_id=1a1d97e2-dc97-4176-9a65-20f40433e703
-2026-10-30 07:52:18,675 INFO next_star_hunter star_search_done request_id=1a1d97e2-dc97-4176-9a65-20f40433e703 hits=5 latency_ms=52
-2026-10-30 07:52:18,676 INFO next_star_hunter ai_call_start user_id=1 request_id=1a1d97e2-dc97-4176-9a65-20f40433e703
-2026-10-30 07:52:18,704 WARNING next_star_hunter ai_call_failure request_id=1a1d97e2-dc97-4176-9a65-20f40433e703 error=AI_TIMEOUT reason=ConnectTimeout
+2026-10-30 11:18:11,485 INFO next_star_hunter request_received method=POST path=/api/chat request_id=9ac890b1-1afd-403e-9c0e-6905f8850720
+2026-10-30 11:18:11,493 INFO next_star_hunter star_pick request_id=9ac890b1-1afd-403e-9c0e-6905f8850720 mode=search
+2026-10-30 11:18:11,525 INFO next_star_hunter star_search_done request_id=9ac890b1-1afd-403e-9c0e-6905f8850720 hits=5 latency_ms=31
+2026-10-30 11:18:11,525 INFO next_star_hunter ai_call_start user_id=2 request_id=9ac890b1-1afd-403e-9c0e-6905f8850720
+2026-10-30 11:18:16,549 WARNING next_star_hunter ai_call_failure request_id=9ac890b1-1afd-403e-9c0e-6905f8850720 error=AI_TIMEOUT reason=ReadTimeout
 ```
 
-AI가 연결은 됐지만 `LLM_TIMEOUT_SECONDS` 안에 답하지 않으면 `reason=ReadTimeout`이 남습니다. AI 서버가 오류로 응답하면 같은 자리에 `error=AI_ERROR reason=http_500`처럼 상태 코드가, 연결에 실패하면 `reason=ConnectError`처럼 예외 이름이 남습니다.
+AI 서버에 연결 자체를 하지 못한 채 시간이 지나면 `reason=ConnectTimeout`이 남습니다. AI 서버가 오류로 응답하면 같은 자리에 `error=AI_ERROR reason=http_500`처럼 상태 코드가, 연결에 실패하면 `reason=ConnectError`처럼 예외 이름이 남습니다.
 
 ### 세션 교체
 
-같은 계정으로 다시 로그인한 뒤 이전 세션으로 화면(`GET /`)을 요청한 경우입니다. 화면 요청은 `/auth?reason=session_replaced`로 이동하고, API 요청은 `401 SESSION_REPLACED`를 받습니다.
+같은 계정으로 다른 곳에서 다시 로그인한 뒤 이전 브라우저가 화면(`GET /`)을 요청한 경우입니다. 화면 요청은 `/auth?reason=session_replaced`로 이동하고, API 요청은 `401 SESSION_REPLACED`를 받습니다.
 
 ```
-2026-10-30 07:52:16,180 INFO next_star_hunter request_received method=POST path=/api/auth/login request_id=0e76ba6f-a658-4881-8103-4ac6808cb229
-2026-10-30 07:52:16,231 INFO next_star_hunter login_success user_id=1 request_id=0e76ba6f-a658-4881-8103-4ac6808cb229
-2026-10-30 07:52:16,238 INFO next_star_hunter request_received method=GET path=/ request_id=91d48e60-3262-410a-971a-982f2f1a8491
-2026-10-30 07:52:16,240 INFO next_star_hunter session_replaced user_id=1 request_id=91d48e60-3262-410a-971a-982f2f1a8491
-2026-10-30 07:52:16,243 INFO next_star_hunter request_received method=GET path=/auth request_id=2641e2ef-d2f1-4c74-80ff-6c54a3747ef2
+2026-10-30 11:14:47,508 INFO next_star_hunter request_received method=POST path=/api/auth/login request_id=124f6c03-4aa0-435c-8ad5-2227284a95f0
+2026-10-30 11:14:47,557 INFO next_star_hunter login_success user_id=2 request_id=124f6c03-4aa0-435c-8ad5-2227284a95f0
+2026-10-30 11:14:47,565 INFO next_star_hunter request_received method=GET path=/ request_id=3eee7163-6193-422b-822e-d649d669edc8
+2026-10-30 11:14:47,568 INFO next_star_hunter session_replaced user_id=2 request_id=3eee7163-6193-422b-822e-d649d669edc8
+2026-10-30 11:14:47,571 INFO next_star_hunter request_received method=GET path=/auth request_id=9ce4ecae-f6e8-4017-adae-ddc2fffbaa37
+```
+
+### 관리자 조회
+
+관리자 계정(`user_id=1`)이 `/admin`을 연 경우입니다. 화면이 관리자 API 세 개를 함께 부르고, 각 요청에 `admin_view`가 남습니다. 조회한 이메일이나 대화 내용은 로그에 남기지 않습니다.
+
+```
+2026-10-30 11:14:49,220 INFO next_star_hunter request_received method=GET path=/admin request_id=55c4f71f-2aaf-48bb-93c4-c37a69ecc899
+2026-10-30 11:14:49,248 INFO next_star_hunter request_received method=GET path=/api/admin/stats request_id=9b0f0837-1fae-4f55-a012-c3bf1e28119a
+2026-10-30 11:14:49,250 INFO next_star_hunter request_received method=GET path=/api/admin/users request_id=dd99ae8e-deeb-4e25-83a6-849f57824d31
+2026-10-30 11:14:49,250 INFO next_star_hunter request_received method=GET path=/api/admin/chats request_id=f1482ff1-5c4b-4527-a388-449ea8e8e328
+2026-10-30 11:14:49,258 INFO next_star_hunter admin_view user_id=1 path=/api/admin/chats request_id=f1482ff1-5c4b-4527-a388-449ea8e8e328
+2026-10-30 11:14:49,260 INFO next_star_hunter admin_view user_id=1 path=/api/admin/users request_id=dd99ae8e-deeb-4e25-83a6-849f57824d31
+2026-10-30 11:14:49,271 INFO next_star_hunter admin_view user_id=1 path=/api/admin/stats request_id=9b0f0837-1fae-4f55-a012-c3bf1e28119a
 ```
 
 ## 스타 자료(나무위키)
