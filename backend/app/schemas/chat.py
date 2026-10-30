@@ -10,6 +10,8 @@ class ChatRequest(BaseModel):
     # Stripped first, so whitespace-only questions are rejected as empty.
     message: str = Field(min_length=1, max_length=1000,
                          examples=["밝은 분위기의 부산 출신 아이돌을 추천해줘"])
+    # Missing or null starts a new conversation; otherwise it must be the user's own.
+    conversation_id: Optional[int] = Field(default=None, examples=[None])
 
 
 class ChatResponse(BaseModel):
@@ -19,3 +21,5 @@ class ChatResponse(BaseModel):
     answer: str
     created_at: datetime
     saved: bool
+    # The conversation the answer was saved in; null only when the save failed.
+    conversation_id: Optional[int]

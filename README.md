@@ -51,7 +51,7 @@
 
 ![후속 질문](docs/images/chat-followup.png)
 
-"그중에"처럼 조건 없이 이어지는 질문은 같은 사용자의 최근 대화 5쌍을 함께 보내 앞의 추천을 기준으로 답합니다. "그 사람 어떤 그룹이야?"처럼 앞서 추천한 사람을 가리키면 같은 사람으로 답하고, "다른 사람"을 원하면 이미 추천한 사람을 빼고 새로 고릅니다. 자료에서 확인되지 않는 내용은 확인하지 못했다고 답합니다.
+"그중에"처럼 조건 없이 이어지는 질문은 같은 사용자의 최근 대화 5쌍을 함께 보내 앞의 추천을 기준으로 답합니다. "그 사람 어떤 그룹이야?"처럼 앞서 추천한 사람을 가리키면 같은 사람으로 답하고, "다른 사람"을 원하면 이미 추천한 사람을 빼고 새로 고릅니다. "오늘의 랜덤 스타"처럼 조건 없이 아무나 원하면 스타 자료에서 한 명을 무작위로 골라 추천합니다. 자료에서 확인되지 않는 내용은 확인하지 못했다고 답합니다.
 
 ### 다른 곳 로그인 안내
 
@@ -76,12 +76,12 @@ flowchart LR
     B["브라우저<br/>Jinja2 화면 + JS"] -->|HTTPS| R["Railway"]
     R --> M
     subgraph S["FastAPI 서버"]
-        M["미들웨어<br/>세션 쿠키 · 요청 ID · 출처 검사 · 요청 로그"] --> RT["routers/<br/>pages · auth · chat · logs · admin"]
+        M["미들웨어<br/>세션 쿠키 · 요청 ID · 출처 검사 · 요청 로그"] --> RT["routers/<br/>pages · auth · chat · logs · conversations · admin"]
         RT --> D["dependencies.py<br/>get_db · get_current_user"]
         RT --> SV["services/chat.py"]
         SV --> SS["services/star_search.py"]
         SV --> AC["services/ai_client.py"]
-        RT --> CR["crud/<br/>users · sessions · chat_logs"]
+        RT --> CR["crud/<br/>users · sessions · conversations · chat_logs"]
         SV --> CR
         D --> CR
     end
@@ -98,7 +98,7 @@ flowchart LR
 |---|---|
 | `frontend/templates/`, `frontend/static/` | 로그인·회원가입 화면(`auth.html`, `auth.js`), 채팅 화면(`chat.html`, `chat.js`)과 관리자 화면(`admin.html`, `admin.js`) |
 | `backend/app/main.py` | 앱 생성, 세션 쿠키·요청 ID·출처 검사 미들웨어, 공통 오류 응답, `/health`, 라우터 등록 |
-| `backend/app/routers/` | URL과 요청·응답 스키마 연결. `pages.py`(화면), `auth.py`(계정), `chat.py`(채팅), `logs.py`(대화 기록 조회·삭제), `admin.py`(관리자 조회) |
+| `backend/app/routers/` | URL과 요청·응답 스키마 연결. `pages.py`(화면), `auth.py`(계정), `chat.py`(채팅), `logs.py`(대화 기록 조회·삭제), `conversations.py`(대화방 목록·조회·삭제), `admin.py`(관리자 조회) |
 | `backend/app/services/` | 채팅 흐름(최근 문맥 → 스타 검색 → AI 호출 → 출처 줄 → 저장), AI API 호출과 오류 변환, 스타 자료 검색 |
 | `backend/app/crud/` | DB 조회와 저장. 라우터와 서비스는 쿼리를 직접 쓰지 않고 이 함수를 부릅니다 |
 | `backend/app/schemas/` | Pydantic 요청·응답 모델. 입력 길이와 형식 검사 |
@@ -113,14 +113,14 @@ backend/
 │   ├── config.py           # 환경 변수 (Settings)
 │   ├── logging_config.py   # 콘솔 로그 형식, LOG_FILE_PATH 파일 로그
 │   ├── database.py         # DB 엔진·세션 생성
-│   ├── models.py           # users, user_sessions, chat_logs, star_profiles, star_chunks
+│   ├── models.py           # users, user_sessions, conversations, chat_logs, star_profiles, star_chunks
 │   ├── dependencies.py     # get_db, get_current_user
 │   ├── security.py         # 비밀번호 해시·검증
 │   ├── openapi_errors.py   # Swagger 오류 응답 예시
 │   ├── init_db.py          # 테이블 생성 (python -m app.init_db)
-│   ├── routers/            # auth.py, chat.py, logs.py, admin.py, pages.py
+│   ├── routers/            # auth.py, chat.py, logs.py, conversations.py, admin.py, pages.py
 │   ├── services/           # chat.py, ai_client.py, star_search.py
-│   ├── crud/               # users.py, sessions.py, chat_logs.py
+│   ├── crud/               # users.py, sessions.py, conversations.py, chat_logs.py
 │   └── schemas/            # auth.py, chat.py, logs.py, admin.py, errors.py
 ├── check_local.py          # 로컬 설정·DB 연결 점검 (값은 출력하지 않음)
 └── local_postgres.py       # Windows 로컬 PostgreSQL 준비
@@ -132,7 +132,9 @@ backend/
 
 ```mermaid
 erDiagram
+    users ||--o{ conversations : "대화방"
     users ||--o{ chat_logs : "작성"
+    conversations ||--o{ chat_logs : "대화"
     users ||--o| user_sessions : "현재 로그인"
     star_profiles ||--o{ star_chunks : "문단"
 
@@ -147,9 +149,17 @@ erDiagram
         varchar(64) session_hash "세션 ID의 SHA-256"
         timestamptz created_at "마지막 로그인 시각"
     }
+    conversations {
+        integer id PK
+        integer user_id FK "users.id, ON DELETE CASCADE"
+        varchar(100) title "첫 질문 앞 40자"
+        timestamptz created_at
+        timestamptz updated_at "마지막 답변 저장 시각"
+    }
     chat_logs {
         integer id PK
         integer user_id FK "users.id"
+        integer conversation_id FK "conversations.id, ON DELETE CASCADE"
         text question
         text answer "출처 줄 포함"
         timestamptz created_at
@@ -181,7 +191,8 @@ erDiagram
 
 - `users`: 로그인 계정입니다. 이메일은 소문자로 바꿔 저장하고, 비밀번호는 솔트를 넣은 해시만 저장합니다.
 - `user_sessions`: 계정마다 지금 유효한 로그인 하나입니다. 로그인할 때마다 행을 덮어쓰므로 이전 브라우저의 세션은 끊깁니다. 세션 ID 원문은 쿠키에만 있고 DB에는 해시만 둡니다.
-- `chat_logs`: 질문과 답변 한 쌍이 한 행입니다. `(user_id, created_at, id)` 인덱스로 사용자별 최근 기록을 찾습니다. AI 답변을 받은 경우에만 저장합니다.
+- `conversations`: 대화방입니다. 채팅 문맥과 후속 질문의 앞 스타는 같은 대화방 안에서만 씁니다. `(user_id, updated_at)` 인덱스로 최근 대화방 목록을 찾습니다.
+- `chat_logs`: 질문과 답변 한 쌍이 한 행이고 대화방 하나에 속합니다. `(user_id, created_at, id)` 인덱스로 사용자별 최근 기록을 찾습니다. AI 답변을 받은 경우에만 저장합니다.
 - `star_profiles`, `star_chunks`: 나무위키에서 가져온 스타 프로필과 본문 조각입니다. 사용자 데이터와 연결하지 않으며 앱이 아니라 적재 스크립트가 채웁니다.
 
 필드별 설명과 인덱스는 [docs/DATABASE.md](docs/DATABASE.md)에 있습니다.
@@ -202,6 +213,10 @@ erDiagram
 | GET | `/api/me` | 필요 | 내 계정 정보 |
 | POST | `/api/chat` | 필요 | 질문 전송, AI 답변 반환, 대화 저장 |
 | GET | `/api/me/chats` | 필요 | 내 대화 기록 (`limit` 1~100, 기본 20) |
+| DELETE | `/api/me/chats/{chat_id}` | 필요 | 내 대화 한 건 삭제 (방이 비면 방도 삭제) |
+| GET | `/api/me/conversations` | 필요 | 내 대화방 목록, 최근 순 (`limit` 1~100, 기본 50) |
+| GET | `/api/me/conversations/{conversation_id}/chats` | 필요 | 대화방 하나의 대화 전체, 오래된 순 |
+| DELETE | `/api/me/conversations/{conversation_id}` | 필요 | 대화방과 그 안의 대화 삭제 |
 
 로그인하면 `next_star_session` 쿠키(HttpOnly, SameSite=Lax, 8시간)가 발급되고, 로그인이 필요한 API는 이 쿠키로 사용자를 확인합니다. 오류는 모두 `{"error": "코드", "message": "안내 문구"}` 형식이며, 모든 응답에 요청 ID가 `X-Request-ID` 헤더로 붙습니다.
 
@@ -209,7 +224,7 @@ erDiagram
 
 질문과 답변을 DB에 저장하는 이유는 다음과 같습니다.
 
-- 문맥 유지: 서버 메모리에 대화를 들고 있지 않고, 질문이 올 때마다 같은 사용자의 최근 5쌍을 `chat_logs`에서 읽어 AI에 함께 보냅니다. 서버를 다시 시작해도 대화를 이어갈 수 있습니다.
+- 문맥 유지: 서버 메모리에 대화를 들고 있지 않고, 질문이 올 때마다 같은 대화방의 최근 5쌍을 `chat_logs`에서 읽어 AI에 함께 보냅니다. `POST /api/chat`에 `conversation_id`를 빼면 새 대화방이 만들어집니다. 서버를 다시 시작해도 대화를 이어갈 수 있습니다.
 - 기록 확인: 다시 접속하면 채팅 화면이 `GET /api/me/chats`로 최근 대화를 불러옵니다. 조회는 로그인한 사용자 ID로만 하므로 다른 사람의 기록은 보이지 않습니다.
 - 추적과 개선: 이상한 추천이 나온 대화를 사용자와 시각으로 찾아 어떤 질문에서 나왔는지 보고, 검색 조건과 프롬프트를 고치는 근거로 씁니다.
 

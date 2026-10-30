@@ -1,12 +1,14 @@
 # 데이터베이스 설계
 
-PostgreSQL을 사용합니다. 테이블은 `PYTHONPATH=backend python -m app.init_db`가 `create_all`로 만들고, 이미 있는 테이블은 그대로 둡니다. 운영에서는 Railway의 Pre-deploy Command로 배포 때마다 실행합니다([DEPLOY.md](DEPLOY.md)).
+PostgreSQL을 사용합니다. 테이블은 `PYTHONPATH=backend python -m app.init_db`가 `create_all`로 만들고, 이미 있는 테이블은 그대로 둡니다. 대화방 기능 전에 만든 DB라면 같은 명령이 `chat_logs.conversation_id`를 추가하고 기존 대화를 묶습니다([아래](#기존-db-업그레이드)). 운영에서는 Railway의 Pre-deploy Command로 배포 때마다 실행합니다([DEPLOY.md](DEPLOY.md)).
 
 ## 관계
 
 ```mermaid
 erDiagram
+    USERS ||--o{ CONVERSATIONS : owns
     USERS ||--o{ CHAT_LOGS : owns
+    CONVERSATIONS ||--o{ CHAT_LOGS : contains
     USERS ||--o| USER_SESSIONS : "logged in as"
     USERS {
         integer id PK
@@ -19,9 +21,17 @@ erDiagram
         varchar session_hash
         timestamptz created_at
     }
+    CONVERSATIONS {
+        integer id PK
+        integer user_id FK
+        varchar title
+        timestamptz created_at
+        timestamptz updated_at
+    }
     CHAT_LOGS {
         integer id PK
         integer user_id FK
+        integer conversation_id FK
         text question
         text answer
         timestamptz created_at
@@ -52,7 +62,7 @@ erDiagram
     }
 ```
 
-한 사용자는 여러 대화 로그를 가질 수 있습니다. 각 로그는 하나의 사용자에게 속합니다. 로그인 세션은 사용자당 최대 하나입니다.
+한 사용자는 여러 대화방을 가지고, 대화방 하나에 대화 로그(질문·답변 한 쌍)가 여러 개 들어갑니다. 각 로그는 한 사용자와 한 대화방에 속합니다. 로그인 세션은 사용자당 최대 하나입니다.
 
 `star_profiles`, `star_chunks` 는 챗봇이 참고할 스타 자료입니다. 사용자 데이터와 연결하지 않고, 앱이 아니라 적재 스크립트(`python -m scripts.namuwiki.load`)가 채웁니다. 한 스타 문서에 문단 조각이 여러 개 붙습니다.
 
@@ -81,17 +91,40 @@ erDiagram
 
 로그아웃하면 행이 지워집니다. 이 테이블은 `python -m app.init_db`(`create_all`)가 만들고, 이미 있는 DB에서 다시 실행하면 기존 테이블은 그대로 두고 이 테이블만 추가됩니다.
 
+### `conversations`
+
+대화방 하나입니다. 채팅 문맥(최근 5쌍)과 후속 질문의 앞 스타는 같은 대화방 안에서만 읽습니다.
+
+| 필드 | 형식 | 설명 |
+| --- | --- | --- |
+| `id` | 정수, 기본 키 | 대화방 식별자 |
+| `user_id` | 정수, 외래 키 | `users.id` 참조 (사용자를 지우면 같이 지워짐) |
+| `title` | 문자열(100) | 첫 질문 앞 40자(더 길면 끝에 `…`). 백필한 방은 `이전 대화` |
+| `created_at` | 시간대 포함 시각 | 대화방 생성 시각 |
+| `updated_at` | 시간대 포함 시각 | 마지막으로 답변을 저장한 시각. 목록 정렬에 씁니다 |
+
+`(user_id, updated_at)` 인덱스 `ix_conversations_user_updated`로 사용자별 대화방 목록을 최신순으로 찾습니다. 새 대화방은 첫 답변을 저장할 때 같은 트랜잭션으로 만들어서, AI 호출이나 저장이 실패하면 빈 방이 남지 않습니다. 대화를 하나씩 지우다 방이 비면 방도 지웁니다.
+
 ### `chat_logs`
 
 | 필드 | 형식 | 설명 |
 | --- | --- | --- |
 | `id` | 정수, 기본 키 | 대화 로그 식별자 |
 | `user_id` | 정수, 외래 키 | `users.id` 참조 |
+| `conversation_id` | 정수, 외래 키, NULL 허용 | `conversations.id` 참조 (대화방을 지우면 같이 지워짐). NULL은 업그레이드 전 행뿐이고 `init_db`가 채웁니다 |
 | `question` | 텍스트 | 사용자가 입력한 질문 |
 | `answer` | 텍스트 | AI가 생성한 응답. 스타 자료를 쓴 경우 서버가 붙인 출처 줄까지 포함 |
 | `created_at` | 시간대 포함 시각 | 대화 생성 시각 |
 
-AI 답변을 받은 대화만 저장합니다. 사용자별 로그 조회와 삭제(`DELETE /api/me/chats/{chat_id}`)는 `user_id`로 제한합니다. 관리자 API는 `user_id`로 묶어 사용자별 대화 수와 마지막 대화 시각을 집계합니다. 최신 기록을 빠르게 가져오도록 `(user_id, created_at, id)` 인덱스 `ix_chat_logs_user_created`를 둡니다.
+AI 답변을 받은 대화만 저장합니다. 사용자별 로그 조회와 삭제(`DELETE /api/me/chats/{chat_id}`)는 `user_id`로 제한합니다. 관리자 API는 `user_id`로 묶어 사용자별 대화 수와 마지막 대화 시각을 집계합니다. 최신 기록을 빠르게 가져오도록 `(user_id, created_at, id)` 인덱스 `ix_chat_logs_user_created`를, 대화방별 조회용으로 `conversation_id` 인덱스 `ix_chat_logs_conversation_id`를 둡니다.
+
+### 기존 DB 업그레이드
+
+`init_db`는 다시 실행해도 결과가 같습니다.
+
+1. `create_all`로 없는 테이블(`conversations` 등)을 만듭니다.
+2. SQLAlchemy inspector로 `chat_logs.conversation_id`가 없으면 `ALTER TABLE chat_logs ADD COLUMN conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE`로 추가하고, `CREATE INDEX IF NOT EXISTS ix_chat_logs_conversation_id`를 실행합니다.
+3. `conversation_id`가 NULL인 로그가 있는 사용자마다 `이전 대화` 방을 하나 만들고(생성 시각은 그 로그들의 가장 이른 시각, `updated_at`은 가장 늦은 시각) 로그를 그 방에 넣습니다. 다시 실행하면 NULL인 로그가 없으므로 아무것도 바꾸지 않습니다.
 
 ### `star_profiles`
 

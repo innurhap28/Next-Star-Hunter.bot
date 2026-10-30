@@ -24,7 +24,7 @@
 | --- | --- | --- |
 | Root Directory | `/` (비움) | 저장소 루트에 `requirements.txt`와 `backend/`가 같이 있다 |
 | Wait for CI | 켬 | GitHub의 CI가 통과한 커밋만 배포한다 |
-| Pre-deploy Command | `PYTHONPATH=backend python -m app.init_db` | 새 버전을 띄우기 전에 테이블을 만든다. 이미 있는 테이블은 그대로 두고 없는 테이블만 추가한다. 실패하면 배포가 멈추고 이전 버전이 계속 돈다 |
+| Pre-deploy Command | `PYTHONPATH=backend python -m app.init_db` | 새 버전을 띄우기 전에 테이블을 만든다. 이미 있는 테이블은 그대로 두고 없는 테이블만 추가한다. 대화방 기능 전 DB면 `chat_logs.conversation_id` 열을 더하고 기존 대화를 사용자별 `이전 대화` 방으로 묶는다(다시 실행해도 바뀌지 않음, [DATABASE.md](DATABASE.md#기존-db-업그레이드)). 실패하면 배포가 멈추고 이전 버전이 계속 돈다 |
 | Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend` | 앱 모듈이 `backend/app/main.py`라서 `--app-dir backend`가 필요하고, `$PORT`(Railway 주입)를 그대로 바인딩해야 라우팅이 붙는다 |
 | Healthcheck Path | `/health` | DB·AI 설정 없이 `{"status":"ok","service":"next-star-hunter"}`를 돌려준다. 이 응답이 와야 새 배포로 트래픽이 넘어간다 |
 | Restart Policy | `ON_FAILURE` | 앱이 죽었을 때만 재시작하고 정상 배포를 반복 재시작하지 않는다 |
