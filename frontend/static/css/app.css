@@ -27,6 +27,7 @@ button { color: inherit; }
 .eyebrow { margin: 0; color: var(--accent-dark); font-size: 10px; font-weight: 700; letter-spacing: .14em; }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; cursor: pointer; font-weight: 600; transition: background .18s ease, transform .18s ease; }
 .button:active { transform: translateY(1px); }
+.button[hidden] { display: none; }
 .button-primary { background: var(--accent); color: white; }
 .button-primary:hover { background: var(--accent-dark); }
 .button-secondary { border: 1px solid var(--line); background: var(--paper); }
