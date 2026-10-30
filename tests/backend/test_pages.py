@@ -50,6 +50,12 @@ def test_auth_page_renders_when_logged_out(client):
     assert r.status_code == 200
     assert "/static/js/auth.js" in r.text
 
+def test_auth_page_has_password_confirm_and_source_footer(client):
+    html = client.get("/auth").text
+    assert 'id="signup-password-confirm"' in html
+    assert "스타 정보 출처" in html
+    assert "CC BY-NC-SA 2.0 KR" in html
+
 def test_auth_page_redirects_home_when_logged_in(client):
     log_in(client)
     r = client.get("/auth")
