@@ -21,6 +21,13 @@ SYSTEM_PROMPT = (
     "스타 이름 제목 줄과 출처 표시는 서버가 붙이니 직접 쓰지 마. "
     "앞선 대화에서 사용자가 말한 조건도 계속 고려해."
 )
+# Added before the reference block when the server picked the star at random.
+RANDOM_PICK_NOTE = (
+    "이번 질문은 조건 없이 아무나 추천해 달라는 랜덤 추천이야. "
+    "서버가 오늘의 랜덤 스타로 참고 자료의 스타 한 명을 무작위로 골랐으니, "
+    "랜덤 추천은 못 한다고 하지 말고 그 스타를 오늘의 랜덤 스타로 소개해. "
+    "취향 조건에 맞춰 골랐다고 말하지는 마."
+)
 ANTHROPIC_VERSION = "2023-06-01"
 
 

@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from test_chat_api import ACCOUNT, FakeAI
 from test_star_search import chat_client, chat_engine, engine  # noqa: F401
 
-from app.models import ChatLog, User
+from app.models import ChatLog, Conversation, User
 from app.services import chat as chat_service
 from app.services.chat import follow_up_mode
 from app.services.star_search import answered_star, find_star, is_star_name
@@ -19,7 +19,7 @@ NEW_GIRLS = "2020년에 데뷔한 걸그룹 멤버 중에 키 큰 사람"
 
 
 def talk(messages, monkeypatch, seed=1, before=None):
-    """Send the messages in order as one user; [(answer, system prompt)] per message."""
+    """Send the messages in order in one conversation; [(answer, system prompt)] per message."""
     monkeypatch.setattr(chat_service, "rng", random.Random(seed))
     fake = FakeAI()
     fake.handler = lambda request: httpx.Response(
@@ -27,18 +27,26 @@ def talk(messages, monkeypatch, seed=1, before=None):
     e = chat_engine()
     client, factory = chat_client(e, fake)
     out = []
+    conversation_id = None
     with client:
         client.post("/api/auth/register", json=ACCOUNT)
         client.post("/api/auth/login", json=ACCOUNT)
         if before:
             with factory() as db:
                 user = db.query(User).one()
+                room = Conversation(user_id=user.id, title="before")
+                db.add(room)
+                db.flush()
+                conversation_id = room.id
                 for question, answer in before:
-                    db.add(ChatLog(user_id=user.id, question=question, answer=answer))
+                    db.add(ChatLog(user_id=user.id, conversation_id=room.id,
+                                   question=question, answer=answer))
                     db.commit()
         for message in messages:
-            r = client.post("/api/chat", json={"message": message})
+            r = client.post("/api/chat", json={"message": message,
+                                               "conversation_id": conversation_id})
             assert r.status_code == 200
+            conversation_id = r.json()["conversation_id"]
             out.append((r.json()["answer"], json.loads(fake.requests[-1].content)["system"]))
     e.dispose()
     return out
