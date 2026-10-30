@@ -1,15 +1,17 @@
 """Follow-up questions: keep the star just recommended, or pick another one on request."""
 import json
 import random
+from types import SimpleNamespace
 
 import httpx
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, update
 from test_chat_api import ACCOUNT, FakeAI
 from test_star_search import chat_client, chat_engine, engine  # noqa: F401
 
-from app.models import ChatLog, Conversation, User
+from app.models import ChatLog, Conversation, StarChunk, User
 from app.services import chat as chat_service
+from app.services.ai_client import SYSTEM_PROMPT
 from app.services.chat import follow_up_mode
 from app.services.star_search import answered_star, find_star, is_star_name
 
@@ -189,3 +191,50 @@ def test_similar_to_the_previous_star_searches_around_that_star(monkeypatch):
 def test_without_a_previous_star_every_question_is_a_search():
     assert follow_up_mode("그 사람 어때?", None) == "search"
     assert follow_up_mode("다른 사람 추천해줘", None) == "another"
+
+
+def glasses_star(engine):  # noqa: F811
+    """부산돌 with the 안경 chunk past the default snippets."""
+    with engine.begin() as conn:
+        conn.execute(update(StarChunk).where(StarChunk.profile_id == 4,
+                                             StarChunk.chunk_index == 1)
+                     .values(content="데뷔 전에는 연습생이었다."))
+        conn.execute(StarChunk.__table__.insert(), [
+            dict(profile_id=4, chunk_index=2, section="활동", content="노래 실력이 좋다.",
+                 source_url="u"),
+            dict(profile_id=4, chunk_index=3, section="여담",
+                 content="무대 밖에서는 안경을 자주 쓴다.", source_url="u")])
+    return engine
+
+
+FIRST = SimpleNamespace(question="안경 쓴 부산 출신 아이돌 추천해줘",
+                        answer="˗ˋˏ 부산돌 ˎˊ˗\n\n안경을 자주 써!\n\n" + SOURCE + "부산돌")
+
+
+@pytest.mark.parametrize("message, expected", [
+    ("그 사람 어떤 그룹 출신이야?", ["직업", "안경", "연습생"]),
+    ("걔 노래 실력은 어때?", ["직업", "노래", "안경"]),
+])
+def test_same_star_follow_up_keeps_the_earlier_keyword_chunk(engine, message,  # noqa: F811
+                                                             expected):
+    found = chat_service._find_reference(glasses_star(engine), message, [FIRST], "t")
+    texts = [s["text"] for s in found.stars[0]["snippets"]]
+    assert found.names == ["부산돌"] and len(texts) == len(expected) <= 3
+    assert all(word in text for word, text in zip(expected, texts))
+
+
+def test_earlier_keywords_come_only_from_questions_about_that_star():
+    other = SimpleNamespace(question="보조개 있는 남자 배우 추천해줘",
+                            answer="˗ˋˏ 부산배우 ˎˊ˗\n\n추천!\n\n" + SOURCE + "부산배우")
+    after = SimpleNamespace(question="걔 노래는?", answer=FIRST.answer)
+    assert chat_service._earlier_keywords([other, FIRST, after], "부산돌") == ["안경", "노래"]
+
+
+def test_find_star_without_earlier_keywords_keeps_two_snippets(engine):  # noqa: F811
+    found = find_star(glasses_star(engine), "부산돌", "걔 노래 실력은 어때?").stars[0]
+    assert [s["section"] for s in found["snippets"]] == ["프로필", "활동"]
+
+
+def test_system_prompt_does_not_retract_earlier_details():
+    assert "사과하거나 잘못 말했다고 정정하지 마" in SYSTEM_PROMPT
+    assert "새 질문에 답하는 데 집중해" in SYSTEM_PROMPT
