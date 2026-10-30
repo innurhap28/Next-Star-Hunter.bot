@@ -29,6 +29,8 @@ class AdminChatItem(BaseModel):
     id: int
     user_id: int
     email: str
+    # null only for a row the init_db backfill has not reached yet.
+    conversation_id: Optional[int]
     question: str
     answer: str
     created_at: datetime

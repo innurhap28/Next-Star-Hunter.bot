@@ -247,7 +247,8 @@ def test_chats_list_newest_first_with_email_and_user_filter(setup):
     items = client.get("/api/admin/chats").json()["items"]
     assert [item["question"] for item in items] == [
         "admin@example.com q0", "member@example.com q1", "member@example.com q0"]
-    assert set(items[0]) == {"id", "user_id", "email", "question", "answer", "created_at"}
+    assert set(items[0]) == {"id", "user_id", "email", "conversation_id", "question", "answer",
+                             "created_at"}
     assert items[1]["email"] == MEMBER["email"]
 
     member_id = user_id(factory, MEMBER["email"])
