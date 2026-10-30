@@ -6,9 +6,9 @@ from sqlalchemy.exc import IntegrityError
 
 from ..crud.sessions import delete_user_session, new_session_id, replace_user_session
 from ..crud.users import create_user, get_user_by_email
-from ..dependencies import get_current_user, get_db
+from ..dependencies import get_current_user, get_db, is_admin
 from ..openapi_errors import LOGIN_ERRORS, LOGOUT_ERRORS, ME_ERRORS, REGISTER_ERRORS
-from ..schemas.auth import Credentials, UserPublic
+from ..schemas.auth import Credentials, MePublic, UserPublic
 from ..security import hash_password, verify_password
 
 router = APIRouter(prefix="/api", tags=["accounts"])
@@ -58,6 +58,7 @@ def logout(request: Request, user=Depends(get_current_user), db=Depends(get_db))
     request.session.clear()
     return Response(status_code=204)
 
-@router.get("/me", response_model=UserPublic, responses=ME_ERRORS)
-def me(user=Depends(get_current_user)):
-    return user
+@router.get("/me", response_model=MePublic, responses=ME_ERRORS)
+def me(request: Request, user=Depends(get_current_user)):
+    return MePublic(id=user.id, email=user.email, created_at=user.created_at,
+                    is_admin=is_admin(request.app.state.settings, user))

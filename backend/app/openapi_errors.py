@@ -149,3 +149,42 @@ HISTORY_ERRORS = {
     ], ValidationErrorResponse),
     503: SERVICE_ERROR,
 }
+
+DELETE_CHAT_ERRORS = {
+    401: LOGIN_REQUIRED,
+    403: ORIGIN_ERROR,
+    404: error_response("대화가 없거나 다른 사용자의 대화입니다. 두 경우를 구분하지 않습니다.", [
+        ("chat_not_found", "없는 대화 또는 남의 대화", {
+            "error": "CHAT_NOT_FOUND", "message": "대화를 찾을 수 없습니다.",
+        }),
+    ]),
+    422: error_response("chat_id는 정수여야 합니다.", [
+        ("chat_id", "chat_id 형식 오류", {
+            "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
+            "fields": [["path", "chat_id"]],
+        }),
+    ], ValidationErrorResponse),
+    503: SERVICE_ERROR,
+}
+
+ADMIN_REQUIRED_ERROR = error_response(
+    "로그인한 계정이 ADMIN_EMAIL 계정이 아닙니다.",
+    [("admin_required", "관리자가 아닌 계정", {
+        "error": "ADMIN_REQUIRED", "message": "관리자만 사용할 수 있습니다.",
+    })],
+)
+
+
+def admin_errors(*query_fields):
+    """401/403/503, plus 422 examples for the given query parameters."""
+    errors = {401: LOGIN_REQUIRED, 403: ADMIN_REQUIRED_ERROR, 503: SERVICE_ERROR}
+    if query_fields:
+        errors[422] = error_response(
+            "조회 조건 검증 실패. limit은 1 이상 100 이하, offset은 0 이상의 정수여야 합니다.",
+            [(field, field + " 범위 또는 형식 오류", {
+                "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
+                "fields": [["query", field]],
+            }) for field in query_fields],
+            ValidationErrorResponse,
+        )
+    return errors
