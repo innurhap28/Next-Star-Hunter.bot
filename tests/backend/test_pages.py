@@ -195,3 +195,20 @@ def test_chat_assets_have_scroll_regions_and_loading_indicator(client):
     assert "scrollRestoration" in js and "const scrollToBottom" in js
     assert "답변을 준비하고 있어요…" in js
     assert "nsh.sidebarOpen" in js
+
+
+def test_chat_assets_use_conversation_list(client):
+    log_in(client)
+    html = client.get("/").text
+    js = client.get("/static/js/chat.js").text
+    css = client.get("/static/css/app.css").text
+    assert "data-chat-history" in html and "data-new-chat" in html
+    # 최근 대화는 대화방 목록이고, 질문은 지금 연 대화방 id 와 함께 보낸다.
+    assert "/api/me/conversations?limit=" in js
+    assert "/chats`" in js and 'method: "DELETE"' in js
+    assert "conversation_id: state.currentId" in js
+    assert "CONVERSATION_NOT_FOUND" in js
+    assert "nsh.lastConversation" in js
+    # 질문 하나씩 보여 주던 옛 목록과 /api/me/chats 연결은 화면에서 뺐다.
+    assert "/api/me/chats" not in js
+    assert ".history-entry.is-current" in css and ".history-time" in css
