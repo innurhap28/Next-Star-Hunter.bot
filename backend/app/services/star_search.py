@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sqlalchemy import and_, func, literal, or_, select, text
+from sqlalchemy import and_, case, func, literal, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 
@@ -107,6 +107,14 @@ REFER_RE = re.compile(r"(?<![가-힣])(?:(?:그|이|저)\s*(?:사람|애|친구|
 # "안경 쓴 애"). '있어?' alone asks about the same star ('다른 특기 있어?').
 ASK_PICK_RE = re.compile(r"추천|찾아|누구|누가|중에|사람|멤버"
                          r"|(?:쓴|있는|없는|하는|한|닮은|같은)\s*(?:애|친구|분|아이돌|배우|가수)")
+
+# '오늘의 랜덤 스타', '아무나 추천해줘', '무작위로 골라줘': a random pick when nothing else
+# is asked (is_random_request checks that no other condition or name is left).
+RANDOM_RE = re.compile(r"랜덤|아무나|아무\s*(?:스타|사람|연예인|한\s*명|거나)"
+                       r"|오늘의\s*(?:스타|추천)|무작위|골라\s*(?:줘|봐|주세요|주라)|뽑아\s*(?:줘|봐|주세요)")
+RANDOM_WORDS = {"랜덤", "랜덤하게", "아무나", "아무", "아무거나", "오늘", "오늘의", "무작위",
+                "골라", "골라줘", "골라봐", "골라주세요", "골라주라", "뽑아", "뽑아줘", "뽑아봐",
+                "뽑아주세요", "한명"}
 
 
 @dataclass
@@ -210,6 +218,20 @@ def parse_query(message: str) -> Query:
         if len(word) >= 2 and not word.endswith(("한", "는", "은", "운", "줘", "요", "게", "고")):
             q.keywords.append(word)
     return q
+
+
+def is_random_request(message: str) -> bool:
+    """'오늘의 랜덤 스타를 추천해줘': a random pick with no other condition or star name.
+
+    '랜덤 아이돌', '부산 출신 아무나', '트와이스에서 골라줘' have conditions, so they are
+    searched as usual.
+    """
+    if not RANDOM_RE.search(message):
+        return False
+    q = parse_query(message)
+    if q.structured() or q.similar:
+        return False
+    return all(t in RANDOM_WORDS or strip_josa(t) in RANDOM_WORDS for t in q.tokens)
 
 
 def merge_previous(current: Query, previous: Query) -> Query:
@@ -540,6 +562,49 @@ def search_stars(engine: Engine, message: str, previous: Optional[str] = None,
     logger.info("star_search_done request_id=%s hits=%s latency_ms=%s",
                 request_id, len(result.stars), latency_ms)
     return result
+
+
+RANDOM_CONDITION = "조건 없는 랜덤 추천(자료에서 무작위로 고른 오늘의 스타)"
+
+
+def random_star(engine: Engine, exclude: tuple[str, ...] = (),
+                request_id: str = "") -> StarSearchResult:
+    """One random person from star_profiles for a request with no conditions.
+
+    Rows with a group or a debut year come first (better known people), then the order
+    is random in SQL with LIMIT 1, so only one row is read back. exclude: titles already
+    recommended in the conversation. Never raises; no row or an error gives an empty
+    result, and the chat answers without references as before.
+    """
+    started = time.monotonic()
+    table = StarProfile.__table__
+    known = case((or_(StarProfile.group_name.isnot(None),
+                      StarProfile.debut_year.isnot(None)), 0), else_=1)
+    conds = [StarProfile.kind == "person"]
+    skip = [t for t in exclude if t]
+    if skip:
+        conds.append(StarProfile.title.notin_(skip))
+    try:
+        with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                conn.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+            row = conn.execute(select(table).where(and_(*conds))
+                               .order_by(known, func.random()).limit(1)).mappings().first()
+            snippets = _default_snippets(conn, [row["id"]]) if row is not None else {}
+            conn.rollback()
+    except Exception as error:  # the chat must work without star data
+        logger.error("star_search_failure request_id=%s error_type=%s",
+                     request_id, type(error).__name__)
+        return StarSearchResult()
+    latency_ms = int((time.monotonic() - started) * 1000)
+    logger.info("star_search_done request_id=%s hits=%s latency_ms=%s",
+                request_id, int(row is not None), latency_ms)
+    if row is None:
+        return StarSearchResult()
+    star = _star(dict(row), snippets.get(row["id"], []))
+    star["anchor"] = False
+    star["matched"] = False
+    return StarSearchResult(stars=[star], conditions=[RANDOM_CONDITION])
 
 
 GENDER_LABEL = {"M": "남", "F": "여"}
