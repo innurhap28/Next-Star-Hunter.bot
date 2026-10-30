@@ -110,6 +110,39 @@ button { color: inherit; }
 .chat-status.is-error { color: #bd493e; }
 .chat-status:empty { display: none; }
 
+/* Admin */
+.admin-layout { width: min(100%, 1040px); margin: 0 auto; padding: 0 28px 40px; }
+.admin-topbar { display: flex; min-height: 64px; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+.admin-badge { padding: 4px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: 11px; font-weight: 700; }
+.admin-main { display: flex; flex-direction: column; gap: 20px; padding-top: 24px; }
+.admin-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.stat-card, .admin-panel { border: 1px solid var(--line); border-radius: 18px; background: var(--paper); }
+.stat-card { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; }
+.stat-label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.stat-value { font-size: 26px; letter-spacing: -.04em; }
+.admin-panel { padding: 18px 20px; }
+.admin-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.admin-panel-head h2 { margin: 0; font-size: 15px; }
+.admin-panel-head .button { min-height: 34px; font-size: 12px; }
+.admin-count { color: var(--muted); font-size: 12px; }
+.admin-table-wrap { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.admin-table th, .admin-table td { padding: 10px 8px; border-bottom: 1px solid #f0ede8; text-align: left; white-space: nowrap; }
+.admin-table th { color: var(--muted); font-weight: 600; }
+.admin-user-row.is-selected { background: var(--accent-soft); }
+.admin-user-button { padding: 0; border: 0; background: transparent; color: var(--accent-dark); cursor: pointer; font-weight: 600; text-align: left; }
+.admin-user-button:hover { text-decoration: underline; }
+.admin-pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+.admin-pager .button { min-height: 34px; font-size: 12px; }
+.admin-pager .button:disabled { cursor: not-allowed; opacity: .5; }
+.admin-chat-list { display: flex; flex-direction: column; gap: 18px; }
+.admin-chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; border-bottom: 1px solid #f0ede8; }
+.admin-chat:last-child { border-bottom: 0; }
+.admin-chat .message { margin: 0; }
+.admin-chat-meta { color: #9b948b; font-size: 11px; }
+.admin-empty { margin: 8px 0; color: #9b948b; font-size: 12px; }
+.admin-main .chat-status { width: 100%; margin: 0; }
+
 @media (max-width: 720px) {
   .chat-layout { grid-template-columns: 1fr; }
   .sidebar { position: fixed; z-index: 2; top: 0; bottom: 0; left: 0; width: min(82vw, 300px); transform: translateX(-105%); transition: transform .2s ease; box-shadow: 8px 0 30px rgba(0, 0, 0, .08); }
@@ -121,6 +154,8 @@ button { color: inherit; }
   .suggestion-chip { font-size: 10px; }
   .auth-card { padding: 28px 22px; }
   .composer-hint { font-size: 9px; }
+  .admin-layout { padding: 0 16px 28px; }
+  .admin-stats { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

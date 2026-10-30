@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f5f2">
+    <meta name="robots" content="noindex">
+    <title>{{ page_title | default("관리자 · Next Star Hunter") }}</title>
+    {% include "_head_assets.html" %}
+    <script src="/static/js/admin.js" defer></script>
+  </head>
+  <body class="admin-page">
+    <div class="admin-layout">
+      <header class="admin-topbar">
+        <a class="brand" href="/" aria-label="Next Star Hunter 홈">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span>Next Star Hunter</span>
+        </a>
+        <span class="admin-badge">관리자</span>
+        <a class="topbar-link" href="/">채팅으로 돌아가기</a>
+      </header>
+
+      <main class="admin-main">
+        <section class="admin-stats" aria-label="서비스 현황">
+          <div class="stat-card">
+            <span class="stat-label">가입자</span>
+            <strong class="stat-value" data-stat="users">-</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">전체 대화</span>
+            <strong class="stat-value" data-stat="chats">-</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">오늘 대화</span>
+            <strong class="stat-value" data-stat="chats_today">-</strong>
+          </div>
+        </section>
+
+        <p class="chat-status" role="status" data-admin-status></p>
+
+        <section class="admin-panel" aria-labelledby="users-heading">
+          <div class="admin-panel-head">
+            <h2 id="users-heading">사용자</h2>
+            <span class="admin-count" data-users-total></span>
+          </div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th scope="col">이메일</th>
+                  <th scope="col">가입일</th>
+                  <th scope="col">대화 수</th>
+                  <th scope="col">마지막 대화</th>
+                </tr>
+              </thead>
+              <tbody data-users-body></tbody>
+            </table>
+          </div>
+          <div class="admin-pager">
+            <button class="button button-secondary" type="button" data-users-prev disabled>이전</button>
+            <span data-users-page></span>
+            <button class="button button-secondary" type="button" data-users-next disabled>다음</button>
+          </div>
+        </section>
+
+        <section class="admin-panel" aria-labelledby="chats-heading">
+          <div class="admin-panel-head">
+            <h2 id="chats-heading" data-chats-title>전체 최근 대화</h2>
+            <button class="button button-secondary" type="button" data-show-all-chats hidden>전체 최근 대화 보기</button>
+          </div>
+          <div class="admin-chat-list" data-chats-list aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
