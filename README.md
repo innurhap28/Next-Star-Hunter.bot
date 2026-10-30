@@ -11,7 +11,7 @@
 - 문제 정의: 관심 가는 스타를 출신 지역, 데뷔 시기, 그룹, 외모 같은 조건을 섞어 찾고 싶지만, 검색창에 조건을 하나씩 넣어서는 찾기 어렵습니다.
 - 대상 사용자: 새로 좋아할 아이돌, 가수, 배우를 취향에 맞춰 찾아보고 싶은 사용자
 - 핵심 시나리오: 회원가입, 로그인, 조건으로 질문, 추천과 이유 확인, 앞의 조건을 이어서 후속 질문, 다시 접속해 이전 대화 확인
-- 주요 기능: 이메일 회원가입과 로그인, 계정당 로그인 세션 하나, 스타 자료 검색과 출처 표시, 최근 대화 5쌍을 이용한 문맥 유지, 내 대화 기록 조회, AI 지연·실패 안내
+- 주요 기능: 이메일 회원가입과 로그인, 계정당 로그인 세션 하나, 스타 자료 검색과 한 명 추천(맨 위 이름 표시, 반말 답변), 출처 표시, 최근 대화 5쌍을 이용한 문맥 유지, 내 대화 기록 조회와 삭제, 관리자 계정의 가입자·대화 조회, AI 지연·실패 안내
 
 ## 기술 스택
 
@@ -33,29 +33,35 @@
 
 ![로그인](docs/images/login.png)
 
-이메일과 비밀번호(8~128자)로 가입하고 로그인합니다. 로그인하지 않고 채팅 화면(`/`)에 들어오면 이 화면(`/auth`)으로 이동합니다.
+이메일과 비밀번호(8~128자)로 가입하고 로그인합니다. 가입할 때는 비밀번호 확인란이 같아야 하며(브라우저에서만 확인), 화면 아래에 스타 정보 출처(나무위키, CC BY-NC-SA 2.0 KR)를 표시합니다. 로그인하지 않고 채팅 화면(`/`)에 들어오면 이 화면(`/auth`)으로 이동합니다.
 
 ### 채팅
 
 ![빈 채팅 화면](docs/images/chat-empty.png)
 
-처음 화면에는 추천 질문 버튼이 있습니다. 버튼을 누르면 정해 둔 질문을 그대로 보냅니다. 왼쪽 최근 대화 목록은 저장된 질문을 최신순으로 보여 주고, 새 대화 버튼은 화면만 비웁니다(저장된 기록은 그대로 남습니다).
+처음 화면에는 추천 질문 버튼이 있습니다. 버튼을 누르면 정해 둔 질문을 그대로 보냅니다. 왼쪽 최근 대화는 대화방 목록입니다(`GET /api/me/conversations`). 대화방마다 제목(첫 질문)과 마지막 대화 시각("5분 전" 등)이 보이고, 마지막으로 대화한 방이 맨 위에 옵니다. 항목을 누르면 그 방의 질문과 답변을 불러오고(`GET /api/me/conversations/{id}/chats`), 지금 연 방은 목록에서 강조됩니다. 새 대화 버튼은 화면을 비우고, 그다음 질문을 보내면 서버가 새 대화방을 만듭니다. 이어지는 질문은 같은 방 안의 대화만 문맥으로 씁니다.
+
+대화방 항목 옆 `×` 버튼은 확인을 거쳐 그 방과 안의 대화를 모두 지웁니다(`DELETE /api/me/conversations/{id}`). 마지막으로 연 대화방은 브라우저에 기억해 두었다가 새로고침하면 다시 열고, 그 방이 없어졌으면 가장 최근 방을 엽니다. 사이드바 오른쪽 가장자리를 끌거나(마우스·터치) 포커스한 뒤 방향키로 너비를 200~480px 사이에서 바꿀 수 있고, 바꾼 너비는 브라우저에 기억됩니다(모바일 화면에서는 숨김). 왼쪽 아래 프로필을 누르면 이메일, 로그아웃, 관리자 계정일 때만 `관리자 페이지` 링크가 있는 메뉴가 열립니다. 화면 아래에는 나무위키와 CC BY-NC-SA 2.0 KR 라이선스 링크를 담은 출처 문구가 있습니다.
 
 ![채팅 답변](docs/images/chat-answer.png)
 
-서버가 질문 속 조건(부산 출신, 아이돌)으로 스타 자료를 찾아 AI에 넘기고, 나머지 단어(안경)는 찾은 스타의 문서 본문에서 찾습니다. 답변에서 언급한 스타만 골라 서버가 마지막 줄에 출처를 붙입니다.
+서버가 질문 속 조건(부산 출신, 아이돌)으로 스타 자료를 찾아 AI에 넘기고, 나머지 단어(안경)는 찾은 스타의 문서 본문에서 찾습니다. 찾은 스타 중 한 명을 무작위로 골라 그 자료만 AI에 넘기고, AI는 친구에게 말하듯 반말로 추천 이유를 설명합니다. 서버가 답변 맨 위에 `˗ˋˏ 이름 ˎˊ˗` 줄을, 마지막 줄에 출처를 붙이고, 화면은 이 이름 줄을 답변 위 가운데에 큰 글씨 제목으로 보여 줍니다(지난 기록도 같습니다).
 
 ### 후속 질문(문맥 유지)
 
 ![후속 질문](docs/images/chat-followup.png)
 
-"그중에"처럼 조건 없이 이어지는 질문은 같은 사용자의 최근 대화 5쌍을 함께 보내 앞의 추천을 기준으로 답합니다. 스타 검색도 바로 앞 질문의 조건을 이어받습니다. 자료에서 확인되지 않는 내용은 확인하지 못했다고 답합니다.
+"그중에"처럼 조건 없이 이어지는 질문은 같은 사용자의 최근 대화 5쌍을 함께 보내 앞의 추천을 기준으로 답합니다. "그 사람 어떤 그룹이야?"처럼 앞서 추천한 사람을 가리키면 같은 사람으로 답하고, "다른 사람"을 원하면 이미 추천한 사람을 빼고 새로 고릅니다. "오늘의 랜덤 스타"처럼 조건 없이 아무나 원하면 스타 자료에서 한 명을 무작위로 골라 추천합니다. 자료에서 확인되지 않는 내용은 확인하지 못했다고 답합니다.
 
 ### 다른 곳 로그인 안내
 
 ![다른 곳 로그인 안내](docs/images/session-replaced.png)
 
 같은 계정으로 다른 브라우저에서 로그인하면 이전 브라우저의 다음 API 요청이 `401 SESSION_REPLACED`를 받고, 화면이 바로 `/auth?reason=session_replaced`로 이동해 안내 문구를 보여 줍니다. 이전 브라우저에서 페이지를 새로 열어도(`GET /`) 같은 화면으로 이동합니다.
+
+### 관리자 화면
+
+`ADMIN_EMAIL` 계정으로 로그인한 뒤 `/admin`을 열면 가입자 수·전체 대화 수·오늘 대화 수, 사용자 목록(가입일, 대화 수, 마지막 대화)을 볼 수 있습니다. 사용자를 누르면 그 사용자의 질문과 답변이 나오고, "전체 최근 대화 보기"로 모든 사용자의 최근 대화로 돌아갑니다. 일반 사용자가 열면 채팅 화면으로 이동합니다.
 
 ### AI 응답 지연 안내
 
@@ -70,12 +76,12 @@ flowchart LR
     B["브라우저<br/>Jinja2 화면 + JS"] -->|HTTPS| R["Railway"]
     R --> M
     subgraph S["FastAPI 서버"]
-        M["미들웨어<br/>세션 쿠키 · 요청 ID · 출처 검사 · 요청 로그"] --> RT["routers/<br/>pages · auth · chat · logs"]
+        M["미들웨어<br/>세션 쿠키 · 요청 ID · 출처 검사 · 요청 로그"] --> RT["routers/<br/>pages · auth · chat · logs · conversations · admin"]
         RT --> D["dependencies.py<br/>get_db · get_current_user"]
         RT --> SV["services/chat.py"]
         SV --> SS["services/star_search.py"]
         SV --> AC["services/ai_client.py"]
-        RT --> CR["crud/<br/>users · sessions · chat_logs"]
+        RT --> CR["crud/<br/>users · sessions · conversations · chat_logs"]
         SV --> CR
         D --> CR
     end
@@ -90,9 +96,9 @@ flowchart LR
 
 | 위치 | 역할 |
 |---|---|
-| `frontend/templates/`, `frontend/static/` | 로그인·회원가입 화면(`auth.html`, `auth.js`)과 채팅 화면(`chat.html`, `chat.js`) |
+| `frontend/templates/`, `frontend/static/` | 로그인·회원가입 화면(`auth.html`, `auth.js`), 채팅 화면(`chat.html`, `chat.js`)과 관리자 화면(`admin.html`, `admin.js`) |
 | `backend/app/main.py` | 앱 생성, 세션 쿠키·요청 ID·출처 검사 미들웨어, 공통 오류 응답, `/health`, 라우터 등록 |
-| `backend/app/routers/` | URL과 요청·응답 스키마 연결. `pages.py`(화면), `auth.py`(계정), `chat.py`(채팅), `logs.py`(대화 기록) |
+| `backend/app/routers/` | URL과 요청·응답 스키마 연결. `pages.py`(화면), `auth.py`(계정), `chat.py`(채팅), `logs.py`(대화 기록 조회·삭제), `conversations.py`(대화방 목록·조회·삭제), `admin.py`(관리자 조회) |
 | `backend/app/services/` | 채팅 흐름(최근 문맥 → 스타 검색 → AI 호출 → 출처 줄 → 저장), AI API 호출과 오류 변환, 스타 자료 검색 |
 | `backend/app/crud/` | DB 조회와 저장. 라우터와 서비스는 쿼리를 직접 쓰지 않고 이 함수를 부릅니다 |
 | `backend/app/schemas/` | Pydantic 요청·응답 모델. 입력 길이와 형식 검사 |
@@ -107,15 +113,15 @@ backend/
 │   ├── config.py           # 환경 변수 (Settings)
 │   ├── logging_config.py   # 콘솔 로그 형식, LOG_FILE_PATH 파일 로그
 │   ├── database.py         # DB 엔진·세션 생성
-│   ├── models.py           # users, user_sessions, chat_logs, star_profiles, star_chunks
+│   ├── models.py           # users, user_sessions, conversations, chat_logs, star_profiles, star_chunks
 │   ├── dependencies.py     # get_db, get_current_user
 │   ├── security.py         # 비밀번호 해시·검증
 │   ├── openapi_errors.py   # Swagger 오류 응답 예시
 │   ├── init_db.py          # 테이블 생성 (python -m app.init_db)
-│   ├── routers/            # auth.py, chat.py, logs.py, pages.py
+│   ├── routers/            # auth.py, chat.py, logs.py, conversations.py, admin.py, pages.py
 │   ├── services/           # chat.py, ai_client.py, star_search.py
-│   ├── crud/               # users.py, sessions.py, chat_logs.py
-│   └── schemas/            # auth.py, chat.py, logs.py, errors.py
+│   ├── crud/               # users.py, sessions.py, conversations.py, chat_logs.py
+│   └── schemas/            # auth.py, chat.py, logs.py, admin.py, errors.py
 ├── check_local.py          # 로컬 설정·DB 연결 점검 (값은 출력하지 않음)
 └── local_postgres.py       # Windows 로컬 PostgreSQL 준비
 ```
@@ -126,7 +132,9 @@ backend/
 
 ```mermaid
 erDiagram
+    users ||--o{ conversations : "대화방"
     users ||--o{ chat_logs : "작성"
+    conversations ||--o{ chat_logs : "대화"
     users ||--o| user_sessions : "현재 로그인"
     star_profiles ||--o{ star_chunks : "문단"
 
@@ -141,9 +149,17 @@ erDiagram
         varchar(64) session_hash "세션 ID의 SHA-256"
         timestamptz created_at "마지막 로그인 시각"
     }
+    conversations {
+        integer id PK
+        integer user_id FK "users.id, ON DELETE CASCADE"
+        varchar(100) title "첫 질문 앞 40자"
+        timestamptz created_at
+        timestamptz updated_at "마지막 답변 저장 시각"
+    }
     chat_logs {
         integer id PK
         integer user_id FK "users.id"
+        integer conversation_id FK "conversations.id, ON DELETE CASCADE"
         text question
         text answer "출처 줄 포함"
         timestamptz created_at
@@ -175,7 +191,8 @@ erDiagram
 
 - `users`: 로그인 계정입니다. 이메일은 소문자로 바꿔 저장하고, 비밀번호는 솔트를 넣은 해시만 저장합니다.
 - `user_sessions`: 계정마다 지금 유효한 로그인 하나입니다. 로그인할 때마다 행을 덮어쓰므로 이전 브라우저의 세션은 끊깁니다. 세션 ID 원문은 쿠키에만 있고 DB에는 해시만 둡니다.
-- `chat_logs`: 질문과 답변 한 쌍이 한 행입니다. `(user_id, created_at, id)` 인덱스로 사용자별 최근 기록을 찾습니다. AI 답변을 받은 경우에만 저장합니다.
+- `conversations`: 대화방입니다. 채팅 문맥과 후속 질문의 앞 스타는 같은 대화방 안에서만 씁니다. `(user_id, updated_at)` 인덱스로 최근 대화방 목록을 찾습니다.
+- `chat_logs`: 질문과 답변 한 쌍이 한 행이고 대화방 하나에 속합니다. `(user_id, created_at, id)` 인덱스로 사용자별 최근 기록을 찾습니다. AI 답변을 받은 경우에만 저장합니다.
 - `star_profiles`, `star_chunks`: 나무위키에서 가져온 스타 프로필과 본문 조각입니다. 사용자 데이터와 연결하지 않으며 앱이 아니라 적재 스크립트가 채웁니다.
 
 필드별 설명과 인덱스는 [docs/DATABASE.md](docs/DATABASE.md)에 있습니다.
@@ -189,12 +206,17 @@ erDiagram
 | GET | `/health` | | 서버 상태 확인 (DB·AI 설정과 무관) |
 | GET | `/` | 필요 (아니면 `/auth`로 이동) | 채팅 화면 |
 | GET | `/auth` | | 로그인·회원가입 화면 (로그인 상태면 `/`로 이동) |
+| GET | `/admin` | 관리자 | 관리자 화면 (아니면 `/auth` 또는 `/`로 이동) |
 | POST | `/api/auth/register` | | 회원가입 |
 | POST | `/api/auth/login` | | 로그인, 세션 쿠키 발급, 이전 세션 교체 |
 | POST | `/api/auth/logout` | 필요 | 로그아웃 |
 | GET | `/api/me` | 필요 | 내 계정 정보 |
 | POST | `/api/chat` | 필요 | 질문 전송, AI 답변 반환, 대화 저장 |
 | GET | `/api/me/chats` | 필요 | 내 대화 기록 (`limit` 1~100, 기본 20) |
+| DELETE | `/api/me/chats/{chat_id}` | 필요 | 내 대화 한 건 삭제 (방이 비면 방도 삭제) |
+| GET | `/api/me/conversations` | 필요 | 내 대화방 목록, 최근 순 (`limit` 1~100, 기본 50) |
+| GET | `/api/me/conversations/{conversation_id}/chats` | 필요 | 대화방 하나의 대화 전체, 오래된 순 |
+| DELETE | `/api/me/conversations/{conversation_id}` | 필요 | 대화방과 그 안의 대화 삭제 |
 
 로그인하면 `next_star_session` 쿠키(HttpOnly, SameSite=Lax, 8시간)가 발급되고, 로그인이 필요한 API는 이 쿠키로 사용자를 확인합니다. 오류는 모두 `{"error": "코드", "message": "안내 문구"}` 형식이며, 모든 응답에 요청 ID가 `X-Request-ID` 헤더로 붙습니다.
 
@@ -202,8 +224,8 @@ erDiagram
 
 질문과 답변을 DB에 저장하는 이유는 다음과 같습니다.
 
-- 문맥 유지: 서버 메모리에 대화를 들고 있지 않고, 질문이 올 때마다 같은 사용자의 최근 5쌍을 `chat_logs`에서 읽어 AI에 함께 보냅니다. 서버를 다시 시작해도 대화를 이어갈 수 있습니다.
-- 기록 확인: 다시 접속하면 채팅 화면이 `GET /api/me/chats`로 최근 대화를 불러옵니다. 조회는 로그인한 사용자 ID로만 하므로 다른 사람의 기록은 보이지 않습니다.
+- 문맥 유지: 서버 메모리에 대화를 들고 있지 않고, 질문이 올 때마다 같은 대화방의 최근 5쌍을 `chat_logs`에서 읽어 AI에 함께 보냅니다. `POST /api/chat`에 `conversation_id`를 빼면 새 대화방이 만들어집니다. 서버를 다시 시작해도 대화를 이어갈 수 있습니다.
+- 기록 확인: 다시 접속하면 채팅 화면이 `GET /api/me/conversations`로 대화방 목록을 불러오고, 마지막으로 연 방의 대화를 다시 보여 줍니다. 조회는 로그인한 사용자 ID로만 하므로 다른 사람의 기록은 보이지 않습니다.
 - 추적과 개선: 이상한 추천이 나온 대화를 사용자와 시각으로 찾아 어떤 질문에서 나왔는지 보고, 검색 조건과 프롬프트를 고치는 근거로 씁니다.
 
 AI 호출이 실패한 질문은 저장하지 않습니다. AI 답변은 받았지만 저장에 실패하면 답변은 그대로 보여 주고 응답의 `saved`를 `false`로 보내며, 화면에 "이 대화는 저장되지 않았어요." 안내를 붙입니다.
@@ -274,6 +296,8 @@ curl -s -b cookies.txt "$BASE/api/me/chats?limit=2"
 | `request_received` | 모든 요청 수신 | `method`, `path`, `request_id` |
 | `login_success` | 로그인 성공 | `user_id`, `request_id` |
 | `session_replaced` | 다른 곳의 로그인으로 끊긴 세션의 요청 | `user_id`, `request_id` |
+| `chat_deleted` | 내 대화 한 건 삭제 | `user_id`, `chat_id`, `request_id` |
+| `admin_view` | 관리자 API 조회 (조회한 데이터는 남기지 않음) | `user_id`, `path`, `request_id` |
 | `star_search_done` | 스타 자료 검색 완료 | `request_id`, `hits`, `latency_ms` |
 | `star_search_failure` | 스타 자료 검색 실패 (채팅은 참고 자료 없이 계속) | `request_id`, `error_type` |
 | `ai_call_start` | AI API 호출 직전 | `user_id`, `request_id` |
@@ -389,6 +413,8 @@ Windows PowerShell에서는 `Copy-Item .env.example .env`, `$env:PYTHONPATH = "b
 | `SESSION_HTTPS_ONLY` | 선택 | 세션 쿠키를 HTTPS에서만 보냄. 운영은 `true` | `false` |
 | `ENABLE_API_DOCS` | 선택 | `/docs`(Swagger UI), `/openapi.json` 노출 | `false` |
 | `LOG_FILE_PATH` | 선택 | 앱 로그를 이 파일에도 기록. 열 수 없으면 경고만 남기고 콘솔 로그는 계속 | 없음 |
+| `ADMIN_EMAIL` | 선택 | 관리자 계정 이메일. 이 이메일로 로그인하면 관리자 API를 쓸 수 있습니다(대소문자 무시). 이 이메일로는 회원가입할 수 없고 `init_db`로만 만들어집니다. 이미 있는 계정을 지정하면 운영자 본인 계정인지 먼저 확인하세요. 비우면 관리자 없음 | 없음 |
+| `ADMIN_PASSWORD` | 선택 | 관리자 계정 비밀번호(8자 이상). `init_db`가 계정이 없을 때만 이 값으로 만들고, 있는 계정의 비밀번호는 바꾸지 않습니다 | 없음 |
 
 `SECRET_KEY`나 `DATABASE_URL`이 없어도 서버는 뜨고 `/health`는 응답합니다. 이때 계정·채팅 API는 `503 AUTH_NOT_CONFIGURED`, `LLM_API_KEY`가 없으면 채팅만 `503 AI_NOT_CONFIGURED`로 응답합니다.
 
@@ -408,7 +434,7 @@ Railway가 `main` 브랜치를 자동 배포하고 같은 프로젝트의 Postgr
 ### 개인별 작업 요약
 
 - 김시현: 저장소와 FastAPI 초기 구성(`/health`), 로그인·회원가입·채팅 화면(#5), 페이지 라우트와 `/static` 연결(#28), 채팅 화면을 채팅·대화 기록 API에 연결하고 오류 코드 안내(#32), 다른 곳 로그인 안내 표시(#43), 나무위키 덤프 스트리밍 리더와 스타 문서 추출 CLI(#31), CI(`lint`, `test`)와 ruff·pytest 설정, PR 템플릿, 라벨·머지 규칙 문서(#12), 린트 정리와 테스트 폴더 통합(#36), Railway 배포 런북과 배포 후 스모크 검사(#14), README와 API·아키텍처·DB·협업 문서(#1, #17), 화면 캡처
-- 황승재: PostgreSQL 연결, 사용자·대화 모델, 회원가입·로그인 API(#4), Swagger 응답 예시와 오류 명세, 로컬 PostgreSQL 준비(#6, #8, #23), 비밀번호 해시 호환(#18), AI 설정(#19), AI 호출 모듈과 `POST /api/chat`(#29), `GET /api/me/chats`와 `check_logs.sql`(#30), 나무마크 정제·청킹·스타 테이블 적재(#33), 채팅 스타 검색과 출처 표시(#35), crud 계층 분리(#41), 계정당 세션 하나와 `user_sessions`(#42), services·schemas 계층 분리와 파일 로그(#45), 출처 줄 정리(#46), 이슈 폼과 라벨 자동화(#12), Railway 프로젝트 구성과 배포
+- 황승재: PostgreSQL 연결, 사용자·대화 모델, 회원가입·로그인 API(#4), Swagger 응답 예시와 오류 명세, 로컬 PostgreSQL 준비(#6, #8, #23), 비밀번호 해시 호환(#18), AI 설정(#19), AI 호출 모듈과 `POST /api/chat`(#29), `GET /api/me/chats`와 `check_logs.sql`(#30), 나무마크 정제·청킹·스타 테이블 적재(#33), 채팅 스타 검색과 출처 표시(#35), crud 계층 분리(#41), 계정당 세션 하나와 `user_sessions`(#42), services·schemas 계층 분리와 파일 로그(#45), 출처 줄 정리(#46), 관리자 계정·조회 API와 대화 삭제 API(#51), 이슈 폼과 라벨 자동화(#12), Railway 프로젝트 구성과 배포
 
 영역별로 나눈 표는 [docs/CONTRIBUTORS.md](docs/CONTRIBUTORS.md)에 있습니다.
 

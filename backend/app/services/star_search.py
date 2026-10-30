@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sqlalchemy import and_, func, literal, or_, select, text
+from sqlalchemy import and_, case, func, literal, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 
@@ -79,8 +79,42 @@ STOPWORDS = {
     "데뷔", "데뷔한", "태어난", "생", "키", "큰", "작은", "장신", "명", "해줘", "줘", "찾아줘",
     "보여줘", "어때", "뭐야", "어떤", "누구야", "좋아", "좋은", "그룹", "팀", "솔로",
     "요즘", "최근", "인기", "유명한", "분", "애", "친구", "대해", "얘기", "정보", "주세요",
+    # follow-up words: another person / the same person
+    "다른", "딴", "말고", "바꿔", "바꿔줘", "하나", "한명", "새로운", "걔", "얘", "그녀",
+    "그분", "이분",
 }
 TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣]+")
+_PERSON = r"(?:사람|애|친구|분|멤버|스타|아이돌|배우|가수|연예인)"
+# '다른 사람', '한 명 더', '또 추천', '그 사람 말고', '말고 다른 애', '다른 애로 바꿔줘',
+# '바꿔줘': a new star is wanted. '말고'/'바꿔' alone are not enough ('노래 말고 다른 특기',
+# '머리 바꿔본 적 있어?' ask about the same star); a name before '말고' is checked
+# against the star data with MALGO_NAME_RE.
+ANOTHER_RE = re.compile(r"다른\s*(?:사람|애|친구|분|멤버|스타|아이돌|배우|가수|연예인|누구)"
+                        r"|딴\s*(?:사람|애|친구|분)|또\s*(?:다른|추천|누구|있어)"
+                        r"|한\s*명\s*더|하나\s*더|새로운\s*사람"
+                        r"|(?<![가-힣])(?:(?:그|이|저)\s*)?(?:" + _PERSON + r"|걔|얘|그녀)"
+                        r"\s*(?:은|는|이|가)?\s*말고"
+                        r"|말고\s*(?:다른\s*" + _PERSON + r"|딴|누구|추천)"
+                        r"|(?<![가-힣])" + _PERSON + r"\s*(?:으로|로|을|를)?\s*바꿔"
+                        r"|^\s*바꿔\s*(?:줘|주세요|봐)?\s*[.!?~]*\s*$")
+# '강혜원 말고': the word before '말고' (a star name only when the data says so)
+MALGO_NAME_RE = re.compile(r"([0-9A-Za-z가-힣]+)\s*말고")
+_AFTER_REF = r"(?=$|[^가-힣]|[은는이가을를의도랑와과한에])"
+# '그 사람', '걔', '그 애', '이 사람', '그녀', '그분', '그 친구', '얘': the star just recommended
+REFER_RE = re.compile(r"(?<![가-힣])(?:(?:그|이|저)\s*(?:사람|애|친구|분|아이돌|배우|가수|멤버)"
+                      + _AFTER_REF + r"|(?:걔|얘|그녀|그분|이분|저분)" + _AFTER_REF + ")")
+# words that ask the bot to find someone ("추천해줘", "누구 있어?", "그 중에 … 사람",
+# "안경 쓴 애"). '있어?' alone asks about the same star ('다른 특기 있어?').
+ASK_PICK_RE = re.compile(r"추천|찾아|누구|누가|중에|사람|멤버"
+                         r"|(?:쓴|있는|없는|하는|한|닮은|같은)\s*(?:애|친구|분|아이돌|배우|가수)")
+
+# '오늘의 랜덤 스타', '아무나 추천해줘', '무작위로 골라줘': a random pick when nothing else
+# is asked (is_random_request checks that no other condition or name is left).
+RANDOM_RE = re.compile(r"랜덤|아무나|아무\s*(?:스타|사람|연예인|한\s*명|거나)"
+                       r"|오늘의\s*(?:스타|추천)|무작위|골라\s*(?:줘|봐|주세요|주라)|뽑아\s*(?:줘|봐|주세요)")
+RANDOM_WORDS = {"랜덤", "랜덤하게", "아무나", "아무", "아무거나", "오늘", "오늘의", "무작위",
+                "골라", "골라줘", "골라봐", "골라주세요", "골라주라", "뽑아", "뽑아줘", "뽑아봐",
+                "뽑아주세요", "한명"}
 
 
 @dataclass
@@ -95,6 +129,7 @@ class Query:
     inherited: bool = False  # structured conditions came from the previous question
     tokens: list[str] = field(default_factory=list)  # name candidates (with josa variants)
     keywords: list[str] = field(default_factory=list)
+    exclude_titles: list[str] = field(default_factory=list)  # stars already recommended
 
     def structured(self) -> bool:
         return bool(self.regions or self.gender or self.kinds or self.debut_years
@@ -185,6 +220,20 @@ def parse_query(message: str) -> Query:
     return q
 
 
+def is_random_request(message: str) -> bool:
+    """'오늘의 랜덤 스타를 추천해줘': a random pick with no other condition or star name.
+
+    '랜덤 아이돌', '부산 출신 아무나', '트와이스에서 골라줘' have conditions, so they are
+    searched as usual.
+    """
+    if not RANDOM_RE.search(message):
+        return False
+    q = parse_query(message)
+    if q.structured() or q.similar:
+        return False
+    return all(t in RANDOM_WORDS or strip_josa(t) in RANDOM_WORDS for t in q.tokens)
+
+
 def merge_previous(current: Query, previous: Query) -> Query:
     """A follow-up with no conditions or names keeps the previous structured conditions."""
     current.regions = current.regions or previous.regions
@@ -221,6 +270,27 @@ def _find_named(conn, tokens: list[str]) -> list[dict]:
     rows = conn.execute(select(StarProfile.__table__).where(cond).limit(10)).mappings().all()
     # a matched name may be a word that is also a keyword; keep the most specific ones
     return [dict(r) for r in rows]
+
+
+def is_star_name(engine: Engine, word: str, request_id: str = "") -> bool:
+    """True when the word (or the word without josa) is a star title or alias.
+
+    Never raises; failures give False.
+    """
+    words = list(dict.fromkeys(w for w in (word, strip_josa(word)) if len(w) >= 2))
+    if not words:
+        return False
+    try:
+        with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                conn.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+            named = _find_named(conn, words)
+            conn.rollback()
+    except Exception as error:  # the chat must work without star data
+        logger.error("star_lookup_failure request_id=%s error_type=%s",
+                     request_id, type(error).__name__)
+        return False
+    return bool(named)
 
 
 def _structured_filters(q: Query, chunks_alias):
@@ -264,6 +334,8 @@ def _candidates(conn, q: Query, extra=None, exclude=()) -> list[dict]:
         conds.append(extra)
     if exclude:
         conds.append(StarProfile.id.notin_(list(exclude)))
+    if q.exclude_titles:
+        conds.append(StarProfile.title.notin_(q.exclude_titles))
     _use_chunk_index(conn, bool(set(q.kinds) & {"actor", "singer"}))
     stmt = select(StarProfile.__table__).select_from(joined).where(and_(*conds))
     if q.height_order == "desc":
@@ -393,7 +465,7 @@ def _search(conn, q: Query) -> StarSearchResult:
         if members:
             q_members = Query(gender=q.gender, debut_years=q.debut_years,
                               birth_years=q.birth_years, height_order=q.height_order,
-                              regions=q.regions)
+                              regions=q.regions, exclude_titles=q.exclude_titles)
             rows = _candidates(conn, q_members, extra=StarProfile.title.in_(members))
             hits = _keyword_hits(conn, [r["id"] for r in rows], keywords)
             if keywords:
@@ -406,7 +478,7 @@ def _search(conn, q: Query) -> StarSearchResult:
         chosen.append((base, [], None))
         sim = Query(regions=q.regions, kinds=q.kinds or ["singer"],
                     gender=q.gender or base.get("gender"), birth_years=q.birth_years,
-                    height_order=q.height_order)
+                    height_order=q.height_order, exclude_titles=q.exclude_titles)
         debut = base.get("debut_year")
         if not q.debut_years and debut:
             sim.debut_years = (debut - 3, debut + 3)
@@ -449,22 +521,34 @@ def _search(conn, q: Query) -> StarSearchResult:
         else:
             result.missing_keywords = keywords
 
+    # the group or the named star the question compares with is context, not a pick
+    anchor = chosen[0][0]["id"] if chosen and (groups or (persons and q.similar)) else None
+    if q.exclude_titles:
+        chosen = [c for c in chosen
+                  if c[0]["id"] == anchor or c[0]["title"] not in q.exclude_titles]
     chosen = chosen[:MAX_STARS]
     need_default = [row["id"] for row, snips, _ in chosen if not snips]
     defaults = _default_snippets(conn, need_default)
     for row, snips, members in chosen:
-        result.stars.append(_star(row, snips or defaults.get(row["id"], []), members))
+        item = _star(row, snips or defaults.get(row["id"], []), members)
+        item["anchor"] = row["id"] == anchor
+        item["matched"] = bool(snips)  # a content keyword was found in its chunks
+        result.stars.append(item)
     return result
 
 
 def search_stars(engine: Engine, message: str, previous: Optional[str] = None,
-                 request_id: str = "") -> StarSearchResult:
-    """Top stars for a question. Never raises; failures give an empty result."""
+                 request_id: str = "", exclude: tuple[str, ...] = ()) -> StarSearchResult:
+    """Top stars for a question. Never raises; failures give an empty result.
+
+    exclude: document titles of stars already recommended ('다른 사람' follow-ups).
+    """
     started = time.monotonic()
     try:
         q = parse_query(message)
         if previous and not q.structured():
             q = merge_previous(q, parse_query(previous))
+        q.exclude_titles = [t for t in exclude if t]
         with engine.connect() as conn:
             if conn.dialect.name == "postgresql":
                 conn.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
@@ -478,6 +562,49 @@ def search_stars(engine: Engine, message: str, previous: Optional[str] = None,
     logger.info("star_search_done request_id=%s hits=%s latency_ms=%s",
                 request_id, len(result.stars), latency_ms)
     return result
+
+
+RANDOM_CONDITION = "조건 없는 랜덤 추천(자료에서 무작위로 고른 오늘의 스타)"
+
+
+def random_star(engine: Engine, exclude: tuple[str, ...] = (),
+                request_id: str = "") -> StarSearchResult:
+    """One random person from star_profiles for a request with no conditions.
+
+    Rows with a group or a debut year come first (better known people), then the order
+    is random in SQL with LIMIT 1, so only one row is read back. exclude: titles already
+    recommended in the conversation. Never raises; no row or an error gives an empty
+    result, and the chat answers without references as before.
+    """
+    started = time.monotonic()
+    table = StarProfile.__table__
+    known = case((or_(StarProfile.group_name.isnot(None),
+                      StarProfile.debut_year.isnot(None)), 0), else_=1)
+    conds = [StarProfile.kind == "person"]
+    skip = [t for t in exclude if t]
+    if skip:
+        conds.append(StarProfile.title.notin_(skip))
+    try:
+        with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                conn.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+            row = conn.execute(select(table).where(and_(*conds))
+                               .order_by(known, func.random()).limit(1)).mappings().first()
+            snippets = _default_snippets(conn, [row["id"]]) if row is not None else {}
+            conn.rollback()
+    except Exception as error:  # the chat must work without star data
+        logger.error("star_search_failure request_id=%s error_type=%s",
+                     request_id, type(error).__name__)
+        return StarSearchResult()
+    latency_ms = int((time.monotonic() - started) * 1000)
+    logger.info("star_search_done request_id=%s hits=%s latency_ms=%s",
+                request_id, int(row is not None), latency_ms)
+    if row is None:
+        return StarSearchResult()
+    star = _star(dict(row), snippets.get(row["id"], []))
+    star["anchor"] = False
+    star["matched"] = False
+    return StarSearchResult(stars=[star], conditions=[RANDOM_CONDITION])
 
 
 GENDER_LABEL = {"M": "남", "F": "여"}
@@ -540,6 +667,36 @@ def format_reference(result: StarSearchResult) -> str:
 
 
 SOURCE_PREFIX = "출처:"
+SOURCE_HEAD = "출처: 나무위키(CC BY-NC-SA 2.0 KR) - "
+TITLE_LEFT = "˗ˋˏ"
+TITLE_RIGHT = "ˎˊ˗"
+# a line with the title marks, or a markdown heading the model wrote by itself
+_TITLE_LIKE = re.compile(r"[ˋˏˎˊ]|^\s*#{1,6}\s")
+_TITLE_LINE = re.compile(r"^\s*˗ˋˏ .* ˎˊ˗\s*$")
+
+
+def display_name(title: str) -> str:
+    """Document title without the trailing disambiguation ('산들(가수)' -> '산들')."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", title).strip() or title
+
+
+def title_line(title: str) -> str:
+    """The first line of an answer that recommends a star."""
+    return f"{TITLE_LEFT} {display_name(title)} {TITLE_RIGHT}"
+
+
+def remove_title_lines(text: str) -> str:
+    """Remove title-like lines the model wrote, and blank lines left at the edges."""
+    lines = [ln for ln in text.split("\n") if not _TITLE_LIKE.search(ln)]
+    return "\n".join(lines).strip("\n").rstrip()
+
+
+def strip_title_line(text: str) -> str:
+    """Drop the server's title line (and the blank lines after it) from a saved answer."""
+    lines = text.split("\n")
+    if lines and _TITLE_LINE.match(lines[0]):
+        return "\n".join(lines[1:]).lstrip("\n")
+    return text
 
 
 def strip_trailing_source(text: str) -> str:
@@ -577,4 +734,82 @@ def source_line(result: StarSearchResult, answer: Optional[str] = None) -> str:
                  if any(f in answer for f in _name_forms(s))]
         names = shown or names
     names = list(dict.fromkeys(names))
-    return "출처: 나무위키(CC BY-NC-SA 2.0 KR) - " + ", ".join(names)
+    return SOURCE_HEAD + ", ".join(names)
+
+
+def answered_star(answer: Optional[str]) -> Optional[str]:
+    """The star a saved answer recommended: the title in its source line, or the name in
+    its title line when the source line is missing or lists several stars. None if none.
+    """
+    lines = [ln.strip() for ln in (answer or "").strip().split("\n")]
+    if lines and lines[-1].startswith(SOURCE_HEAD):
+        name = lines[-1][len(SOURCE_HEAD):].strip()
+        if name and ", " not in name:
+            return name
+    if lines and _TITLE_LINE.match(lines[0]):
+        name = lines[0][len(TITLE_LEFT):-len(TITLE_RIGHT)].strip()
+        return name or None
+    return None
+
+
+def _profile_by_name(conn, name: str) -> Optional[dict]:
+    """Exact title first; then an alias or a 'name(…)' title (display name in a title line)."""
+    table = StarProfile.__table__
+    row = conn.execute(select(table).where(StarProfile.title == name)).mappings().first()
+    if row is not None:
+        return dict(row)
+    clean = name.replace("%", "").replace("_", "")
+    rows = conn.execute(
+        select(table).where(or_(_alias_match(name), StarProfile.title.like(clean + "(%"),
+                                StarProfile.title.like(clean + " (%")))
+        .order_by(StarProfile.id).limit(10)
+    ).mappings().all()
+    rows = [dict(r) for r in rows]
+    rows.sort(key=lambda r: (display_name(r["title"]) != name, r["kind"] != "person"))
+    return rows[0] if rows else None
+
+
+def find_star(engine: Engine, name: Optional[str], message: str = "", *,
+              request_id: str = "", unless_other_named: bool = False
+              ) -> Optional[StarSearchResult]:
+    """The star a previous answer recommended, as a one-star result for a follow-up.
+
+    name is a document title or the name in a title line (exact title, alias, or the
+    title without its parenthesized part). The profile chunk and a chunk with a content
+    keyword of the message (or the next chunk) are the snippets. Returns None when the
+    star is not found, when unless_other_named and the message names another star, or on
+    any error. Never raises.
+    """
+    if not name or not name.strip():
+        return None
+    try:
+        q = parse_query(message)
+        with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                conn.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+            row = _profile_by_name(conn, name.strip())
+            if row is None:
+                conn.rollback()
+                return None
+            named = _find_named(conn, q.tokens) if unless_other_named else []
+            if any(r["id"] != row["id"] for r in named):
+                conn.rollback()
+                return None
+            own = {row["title"], display_name(row["title"]),
+                   *(row.get("aliases") or "").split("\n")}
+            keywords = [k for k in q.keywords if k not in own][:3]
+            hits = _keyword_hits(conn, [row["id"]], keywords).get(row["id"], [])
+            defaults = _default_snippets(conn, [row["id"]]).get(row["id"], [])
+            members = _members(conn, row["title"]) if row["kind"] == "group" else None
+            conn.rollback()
+    except Exception as error:  # the chat must work without star data
+        logger.error("star_lookup_failure request_id=%s error_type=%s",
+                     request_id, type(error).__name__)
+        return None
+    snippets = defaults
+    if hits:
+        snippets = defaults[:1] + [h for h in hits if h[1] not in {d[1] for d in defaults[:1]}]
+    star = _star(row, snippets, members)
+    star["anchor"] = False
+    star["matched"] = bool(hits)
+    return StarSearchResult(stars=[star])

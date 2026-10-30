@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-    U[사용자 브라우저] -->|"화면 /, /auth"| A[FastAPI]
+    U[사용자 브라우저] -->|"화면 /, /auth, /admin"| A[FastAPI]
     U -->|"/api/*"| A
     A -->|"질문 + 최근 대화 + 스타 자료"| AI[copa AI API]
     AI --> A
@@ -30,15 +30,15 @@ backend/app/
 ├── config.py           # 환경 변수 설정 (Settings)
 ├── logging_config.py   # 콘솔 로그 형식, LOG_FILE_PATH 파일 로그
 ├── database.py         # DB 엔진·세션 생성
-├── models.py           # SQLAlchemy 테이블 (users, user_sessions, chat_logs, star_profiles, star_chunks)
+├── models.py           # SQLAlchemy 테이블 (users, user_sessions, conversations, chat_logs, star_profiles, star_chunks)
 ├── dependencies.py     # get_db, get_current_user (로그인·세션 일치 확인 공통 의존성)
 ├── security.py         # 비밀번호 해시·검증
 ├── openapi_errors.py   # Swagger 에 보일 오류 응답 예시
-├── init_db.py          # 테이블 생성 스크립트 (python -m app.init_db)
-├── routers/            # HTTP 경로: auth.py(계정), chat.py(채팅), logs.py(대화 기록), pages.py(화면)
+├── init_db.py          # 테이블 생성·업그레이드 스크립트 (python -m app.init_db)
+├── routers/            # HTTP 경로: auth.py(계정), chat.py(채팅), logs.py(대화 기록 조회·삭제), conversations.py(대화방 목록·조회·삭제), admin.py(관리자 조회), pages.py(화면)
 ├── services/           # 업무 흐름: chat.py(채팅 처리), ai_client.py(AI API 호출), star_search.py(스타 자료 검색)
-├── crud/               # DB 접근 함수: users.py, sessions.py, chat_logs.py
-└── schemas/            # 요청·응답 Pydantic 스키마: auth.py, chat.py, logs.py, errors.py
+├── crud/               # DB 접근 함수: users.py, sessions.py, conversations.py, chat_logs.py
+└── schemas/            # 요청·응답 Pydantic 스키마: auth.py, chat.py, logs.py, conversations.py, admin.py, errors.py
 ```
 
 계층마다 맡는 일은 다음과 같습니다.
@@ -47,20 +47,20 @@ backend/app/
 | --- | --- |
 | `routers/` | 경로와 요청·응답 스키마 선언, 의존성 주입(`get_db`, `get_current_user`), 서비스의 오류를 HTTP 응답으로 바꾸기 |
 | `services/` | 업무 흐름. 채팅은 최근 문맥 조회 → 스타 자료 검색 → AI 호출 → 출처 줄 붙이기 → 저장 순서로 진행하고, AI 실패는 `AIError` 로 올립니다 |
-| `crud/` | 쿼리와 저장(commit/rollback). 회원가입은 `get_user_by_email`, `create_user`, 채팅은 `recent_chat_pairs`, `save_chat_log`, 기록 조회는 `list_user_chats` |
+| `crud/` | 쿼리와 저장(commit/rollback). 회원가입은 `get_user_by_email`, `create_user`, 채팅은 `get_user_conversation`, `recent_chat_pairs`, `save_chat_log`(새 대화방도 같은 commit 으로 생성), 기록 조회는 `list_user_chats`, 대화방은 `crud/conversations.py` |
 | `schemas/` | API 입출력 형식(Pydantic). `schemas/__init__.py` 가 모든 이름을 다시 내보내므로 `from app.schemas import ChatRequest` 처럼 써도 됩니다 |
 | `models.py` | DB 테이블 정의(SQLAlchemy) |
 | `dependencies.py` | 요청마다 쓰는 DB 세션과 로그인 사용자 확인 |
 
-계정 API(`routers/auth.py`)와 대화 기록 조회(`routers/logs.py`)는 흐름이 짧아 라우터가 `crud/` 를 바로 부릅니다. 스타 데이터 검색 쿼리는 검색 로직과 붙어 있어 `services/star_search.py` 에 그대로 둡니다. 로그 이벤트 이름(`ai_call_start`, `db_save_success` 등)은 서비스로 옮긴 뒤에도 같습니다.
+계정 API(`routers/auth.py`), 대화 기록 조회·삭제(`routers/logs.py`), 대화방(`routers/conversations.py`), 관리자 조회(`routers/admin.py`)는 흐름이 짧아 라우터가 `crud/` 를 바로 부릅니다. 관리자 API는 `dependencies.require_admin` 이 로그인 확인 뒤 이메일을 `ADMIN_EMAIL` 과 비교해 아니면 403 `ADMIN_REQUIRED` 로 막습니다. 스타 데이터 검색 쿼리는 검색 로직과 붙어 있어 `services/star_search.py` 에 그대로 둡니다. 로그 이벤트 이름(`ai_call_start`, `db_save_success` 등)은 서비스로 옮긴 뒤에도 같습니다.
 
 ## 질문 처리 흐름
 
 1. 미들웨어가 요청 ID를 정하고 `request_received`를 남긴 뒤, 브라우저의 쓰기 요청이면 출처(`Origin`)를 확인합니다.
 2. `get_current_user`가 쿠키의 세션을 `user_sessions`와 비교합니다. 로그인하지 않았으면 `401 LOGIN_REQUIRED`, 다른 곳에서 로그인했으면 `401 SESSION_REPLACED`입니다.
-3. `ChatRequest`가 질문을 검사합니다(앞뒤 공백 제거 후 1~1000자, 다른 필드 거부).
-4. `services/chat.py`가 같은 사용자의 최근 5쌍을 읽고, 스타 자료를 검색한 뒤(`star_search_done`), AI API를 호출합니다(`ai_call_start`, `ai_call_success`).
-5. 답변에 출처 줄을 붙여 `chat_logs`에 저장하고(`db_save_success`) 응답합니다.
+3. `ChatRequest`가 질문을 검사합니다(앞뒤 공백 제거 후 1~1000자, `conversation_id`는 정수 또는 null, 다른 필드 거부).
+4. `services/chat.py`가 `conversation_id`가 내 대화방인지 확인하고(아니면 `404 CONVERSATION_NOT_FOUND`) 그 대화방의 최근 5쌍을 읽고(새 대화방이면 문맥 없음), 스타 자료를 검색하거나 랜덤 추천이면 무작위로 한 명을 고른 뒤(`star_search_done`), AI API를 호출합니다(`ai_call_start`, `ai_call_success`).
+5. 답변에 출처 줄을 붙여 `chat_logs`에 저장하고(새 대화방이면 함께 만들고, 대화방 `updated_at` 갱신, `db_save_success`) 응답합니다.
 
 실패하면 다음과 같이 처리합니다.
 
@@ -70,3 +70,9 @@ backend/app/
 | AI 시간 초과, 오류 응답, 연결 실패 | `ai_call_failure`를 남기고 `504 AI_TIMEOUT` 또는 `502 AI_ERROR`(`LLM_API_KEY`가 없으면 `503 AI_NOT_CONFIGURED`). 질문은 저장하지 않음 |
 | 답변 저장 실패 | `db_save_failure`를 남기고 답변은 `saved: false`로 반환 |
 | 그 밖의 DB 오류 | `db_operation_failure`를 남기고 `503 DB_UNAVAILABLE` |
+
+화면의 공통 `<head>` 자산(폰트 preconnect·preload, `app.css`)은 `frontend/templates/_head_assets.html` 한 곳에 두고 `auth.html`, `chat.html`, `admin.html` 이 include 합니다. 폰트는 Google Fonts 에서 DM Sans, Noto Sans KR 의 400·600·700 만 불러옵니다(`app.css` 에서 쓰는 굵기).
+
+채팅 화면은 페이지 전체가 스크롤되지 않습니다. 사이드바의 대화 목록과 가운데 메시지 영역(`.conversation`)이 각자 스크롤되고, 입력창과 왼쪽 아래 사용자 프로필은 항상 보입니다. 메시지 영역은 질문을 보냈을 때, 답변이나 오류가 왔을 때, 처음 기록을 불러왔을 때 `scrollToBottom()` 으로 맨 아래로 내려갑니다. 새로고침 때 브라우저의 스크롤 복원은 끕니다(`history.scrollRestoration = "manual"`). 답변을 기다리는 동안에는 스피너와 "답변을 준비하고 있어요…"를 보여 주고, 3초가 지나면 문구를 3초마다 바꿉니다. 모바일 사이드바를 열어 둔 상태는 `localStorage`(`nsh.sidebarOpen`)에 남겨 새로고침해도 유지합니다.
+
+사이드바의 최근 대화는 대화방 목록입니다. `chat.js` 는 지금 연 대화방 id(`state.currentId`, 새 대화면 `null`)를 들고 있다가 `POST /api/chat` 에 `conversation_id` 로 함께 보내고, 응답의 `conversation_id` 로 바꾼 뒤 그 방을 목록 맨 위로 올립니다. 대화방을 누르면 `GET /api/me/conversations/{id}/chats` 로 메시지 영역을 다시 그리고, `×` 는 확인 후 `DELETE /api/me/conversations/{id}` 를 부릅니다(지금 연 방이면 새 대화 상태로). 마지막으로 연 방 id 는 `localStorage`(`nsh.lastConversation`)에 남겨 다음 접속 때 다시 열고, 없으면 가장 최근 방을 엽니다. 대화방이 이미 지워져 `404 CONVERSATION_NOT_FOUND` 가 오면 목록을 새로 불러오고 새 대화로 돌아갑니다. 화면은 더 이상 `GET /api/me/chats`, `DELETE /api/me/chats/{chat_id}` 를 쓰지 않습니다(API 는 그대로 있음).

@@ -95,12 +95,24 @@ LOGIN_ERRORS = {
 LOGOUT_ERRORS = {401: LOGIN_REQUIRED, 403: ORIGIN_ERROR, 503: SERVICE_ERROR}
 ME_ERRORS = {401: LOGIN_REQUIRED, 503: SERVICE_ERROR}
 
+CONVERSATION_NOT_FOUND = {"error": "CONVERSATION_NOT_FOUND",
+                          "message": "대화방을 찾을 수 없습니다."}
+CONVERSATION_NOT_FOUND_ERROR = error_response(
+    "대화방이 없거나 다른 사용자의 대화방입니다. 두 경우를 구분하지 않습니다.",
+    [("conversation_not_found", "없는 대화방 또는 남의 대화방", CONVERSATION_NOT_FOUND)],
+)
+
 CHAT_VALIDATION_ERROR = error_response(
-    "질문 검증 실패. 앞뒤 공백을 지운 뒤 1자 이상 1000자 이하여야 하며 입력값은 포함하지 않습니다.",
+    "질문 검증 실패. 앞뒤 공백을 지운 뒤 1자 이상 1000자 이하여야 하며 입력값은 포함하지 않습니다. "
+    "conversation_id는 정수 또는 null이어야 합니다.",
     [
         ("message", "빈 질문 또는 1000자 초과", {
             "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
             "fields": [["body", "message"]],
+        }),
+        ("conversation_id", "conversation_id 형식 오류", {
+            "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
+            "fields": [["body", "conversation_id"]],
         }),
         ("invalid_json", "JSON 구문 오류 위치 예시", {
             "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
@@ -112,6 +124,7 @@ CHAT_VALIDATION_ERROR = error_response(
 CHAT_ERRORS = {
     401: LOGIN_REQUIRED,
     403: ORIGIN_ERROR,
+    404: CONVERSATION_NOT_FOUND_ERROR,
     422: CHAT_VALIDATION_ERROR,
     502: error_response("AI API 호출 또는 응답 형식 오류입니다. 외부 응답 내용은 담지 않습니다.", [
         ("ai_error", "AI API 호출 실패", {
@@ -149,3 +162,69 @@ HISTORY_ERRORS = {
     ], ValidationErrorResponse),
     503: SERVICE_ERROR,
 }
+
+DELETE_CHAT_ERRORS = {
+    401: LOGIN_REQUIRED,
+    403: ORIGIN_ERROR,
+    404: error_response("대화가 없거나 다른 사용자의 대화입니다. 두 경우를 구분하지 않습니다.", [
+        ("chat_not_found", "없는 대화 또는 남의 대화", {
+            "error": "CHAT_NOT_FOUND", "message": "대화를 찾을 수 없습니다.",
+        }),
+    ]),
+    422: error_response("chat_id는 정수여야 합니다.", [
+        ("chat_id", "chat_id 형식 오류", {
+            "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
+            "fields": [["path", "chat_id"]],
+        }),
+    ], ValidationErrorResponse),
+    503: SERVICE_ERROR,
+}
+
+CONVERSATION_LIST_ERRORS = HISTORY_ERRORS
+
+
+def _conversation_id_error():
+    return error_response("conversation_id는 정수여야 합니다.", [
+        ("conversation_id", "conversation_id 형식 오류", {
+            "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
+            "fields": [["path", "conversation_id"]],
+        }),
+    ], ValidationErrorResponse)
+
+
+CONVERSATION_CHATS_ERRORS = {
+    401: LOGIN_REQUIRED,
+    404: CONVERSATION_NOT_FOUND_ERROR,
+    422: _conversation_id_error(),
+    503: SERVICE_ERROR,
+}
+
+DELETE_CONVERSATION_ERRORS = {
+    401: LOGIN_REQUIRED,
+    403: ORIGIN_ERROR,
+    404: CONVERSATION_NOT_FOUND_ERROR,
+    422: _conversation_id_error(),
+    503: SERVICE_ERROR,
+}
+
+ADMIN_REQUIRED_ERROR = error_response(
+    "로그인한 계정이 ADMIN_EMAIL 계정이 아닙니다.",
+    [("admin_required", "관리자가 아닌 계정", {
+        "error": "ADMIN_REQUIRED", "message": "관리자만 사용할 수 있습니다.",
+    })],
+)
+
+
+def admin_errors(*query_fields):
+    """401/403/503, plus 422 examples for the given query parameters."""
+    errors = {401: LOGIN_REQUIRED, 403: ADMIN_REQUIRED_ERROR, 503: SERVICE_ERROR}
+    if query_fields:
+        errors[422] = error_response(
+            "조회 조건 검증 실패. limit은 1 이상 100 이하, offset은 0 이상의 정수여야 합니다.",
+            [(field, field + " 범위 또는 형식 오류", {
+                "error": "VALIDATION_ERROR", "message": "입력 형식을 확인해주세요.",
+                "fields": [["query", field]],
+            }) for field in query_fields],
+            ValidationErrorResponse,
+        )
+    return errors
