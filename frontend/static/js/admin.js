@@ -162,10 +162,29 @@
       question.textContent = chat.question;
       const answer = document.createElement("p");
       answer.className = "message message-assistant";
-      answer.textContent = chat.answer;
+      setAnswer(answer, chat.answer);
       article.append(meta, question, answer);
       chatsList.append(article);
     }
+  };
+
+  // Same title rendering as chat.js: "˗ˋˏ name ˎˊ˗" on the first line becomes the title.
+  const TITLE_LINE = /^˗ˋˏ (.+) ˎˊ˗$/;
+  const setAnswer = (item, text) => {
+    const value = String(text ?? "");
+    const lineEnd = value.indexOf("\n");
+    const firstLine = (lineEnd === -1 ? value : value.slice(0, lineEnd)).trim();
+    if (!TITLE_LINE.test(firstLine)) {
+      item.textContent = value;
+      return;
+    }
+    const title = document.createElement("strong");
+    title.className = "answer-title";
+    title.textContent = firstLine;
+    const body = document.createElement("span");
+    body.className = "answer-body";
+    body.textContent = lineEnd === -1 ? "" : value.slice(lineEnd + 1).replace(/^\s*\n/, "");
+    item.replaceChildren(title, body);
   };
 
   const loadChats = async (user) => {
