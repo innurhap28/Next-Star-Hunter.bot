@@ -59,6 +59,10 @@
 
 같은 계정으로 다른 브라우저에서 로그인하면 이전 브라우저의 다음 API 요청이 `401 SESSION_REPLACED`를 받고, 화면이 바로 `/auth?reason=session_replaced`로 이동해 안내 문구를 보여 줍니다. 이전 브라우저에서 페이지를 새로 열어도(`GET /`) 같은 화면으로 이동합니다.
 
+### 관리자 화면
+
+`ADMIN_EMAIL` 계정으로 로그인한 뒤 `/admin`을 열면 가입자 수·전체 대화 수·오늘 대화 수, 사용자 목록(가입일, 대화 수, 마지막 대화)을 볼 수 있습니다. 사용자를 누르면 그 사용자의 질문과 답변이 나오고, "전체 최근 대화 보기"로 모든 사용자의 최근 대화로 돌아갑니다. 일반 사용자가 열면 채팅 화면으로 이동합니다.
+
 ### AI 응답 지연 안내
 
 ![AI 응답 지연](docs/images/ai-timeout.png)
@@ -92,7 +96,7 @@ flowchart LR
 
 | 위치 | 역할 |
 |---|---|
-| `frontend/templates/`, `frontend/static/` | 로그인·회원가입 화면(`auth.html`, `auth.js`)과 채팅 화면(`chat.html`, `chat.js`) |
+| `frontend/templates/`, `frontend/static/` | 로그인·회원가입 화면(`auth.html`, `auth.js`), 채팅 화면(`chat.html`, `chat.js`)과 관리자 화면(`admin.html`, `admin.js`) |
 | `backend/app/main.py` | 앱 생성, 세션 쿠키·요청 ID·출처 검사 미들웨어, 공통 오류 응답, `/health`, 라우터 등록 |
 | `backend/app/routers/` | URL과 요청·응답 스키마 연결. `pages.py`(화면), `auth.py`(계정), `chat.py`(채팅), `logs.py`(대화 기록 조회·삭제), `admin.py`(관리자 조회) |
 | `backend/app/services/` | 채팅 흐름(최근 문맥 → 스타 검색 → AI 호출 → 출처 줄 → 저장), AI API 호출과 오류 변환, 스타 자료 검색 |
@@ -191,6 +195,7 @@ erDiagram
 | GET | `/health` | | 서버 상태 확인 (DB·AI 설정과 무관) |
 | GET | `/` | 필요 (아니면 `/auth`로 이동) | 채팅 화면 |
 | GET | `/auth` | | 로그인·회원가입 화면 (로그인 상태면 `/`로 이동) |
+| GET | `/admin` | 관리자 | 관리자 화면 (아니면 `/auth` 또는 `/`로 이동) |
 | POST | `/api/auth/register` | | 회원가입 |
 | POST | `/api/auth/login` | | 로그인, 세션 쿠키 발급, 이전 세션 교체 |
 | POST | `/api/auth/logout` | 필요 | 로그아웃 |

@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import Settings
 from app.database import Base
+from app.init_db import seed_admin
 from app.main import create_app
 
 ACCOUNT = {"email": "page@example.com", "password": "safe-test-password-123"}
@@ -27,6 +28,9 @@ def client():
     with TestClient(create_app(settings, factory), follow_redirects=False) as client:
         yield client
     engine.dispose()
+
+ADMIN_PASSWORD = "admin-test-password-123"
+
 
 def log_in(client):
     assert client.post("/api/auth/register", json=ACCOUNT).status_code == 201
@@ -94,6 +98,78 @@ def test_pages_preconnect_and_preload_fonts(client):
 def test_app_css_has_no_font_import(client):
     css = client.get("/static/css/app.css").text
     assert "@import" not in css
+
+
+@pytest.fixture
+def admin_client():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(engine, expire_on_commit=False)
+    settings = Settings(
+        _env_file=None,
+        SECRET_KEY="test-only-signing-secret-at-least-32-characters",
+        DATABASE_URL="postgresql+psycopg://unused:unused@localhost/test",
+        ADMIN_EMAIL="Admin@Example.com",
+        ADMIN_PASSWORD=ADMIN_PASSWORD,
+    )
+    assert seed_admin(factory, settings) == "created"
+    with TestClient(create_app(settings, factory), follow_redirects=False) as client:
+        yield client
+    engine.dispose()
+
+
+def log_in_as(client, email):
+    account = {"email": email, "password": "safe-test-password-123"}
+    assert client.post("/api/auth/register", json=account).status_code == 201
+    assert client.post("/api/auth/login", json=account).status_code == 200
+
+
+def log_in_admin(client):
+    # 관리자 계정은 회원가입이 막혀 있고 init_db(seed_admin)로만 만들어진다.
+    account = {"email": "admin@example.com", "password": ADMIN_PASSWORD}
+    assert client.post("/api/auth/login", json=account).status_code == 200
+
+
+def test_admin_page_redirects_to_auth_when_logged_out(admin_client):
+    r = admin_client.get("/admin")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/auth"
+
+
+def test_admin_page_redirects_home_for_normal_user(admin_client):
+    log_in_as(admin_client, "user@example.com")
+    r = admin_client.get("/admin")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+
+
+def test_admin_page_renders_for_admin_email(admin_client):
+    log_in_admin(admin_client)
+    r = admin_client.get("/admin")
+    assert r.status_code == 200
+    assert "/static/js/admin.js" in r.text
+    assert 'rel="preload" as="style"' in r.text
+    assert not re.search(r"\{\{|\}\}|\{%|%\}", r.text)
+
+
+def test_admin_page_redirects_when_session_replaced(admin_client):
+    log_in_admin(admin_client)
+    old_cookie = admin_client.cookies.get("next_star_session")
+    account = {"email": "admin@example.com", "password": ADMIN_PASSWORD}
+    assert admin_client.post("/api/auth/login", json=account).status_code == 200
+    admin_client.cookies.set("next_star_session", old_cookie)
+    r = admin_client.get("/admin")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/auth?reason=session_replaced"
+
+
+def test_admin_page_closed_without_admin_email(client):
+    log_in(client)
+    r = client.get("/admin")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+    assert "/admin" not in client.app.openapi()["paths"]
 
 
 def test_chat_page_has_account_menu_resizer_and_source_footer(client):
