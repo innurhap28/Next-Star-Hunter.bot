@@ -59,7 +59,7 @@ backend/app/
 1. 미들웨어가 요청 ID를 정하고 `request_received`를 남긴 뒤, 브라우저의 쓰기 요청이면 출처(`Origin`)를 확인합니다.
 2. `get_current_user`가 쿠키의 세션을 `user_sessions`와 비교합니다. 로그인하지 않았으면 `401 LOGIN_REQUIRED`, 다른 곳에서 로그인했으면 `401 SESSION_REPLACED`입니다.
 3. `ChatRequest`가 질문을 검사합니다(앞뒤 공백 제거 후 1~1000자, 다른 필드 거부).
-4. `services/chat.py`가 같은 사용자의 최근 5쌍을 읽고, 스타 자료를 검색한 뒤(`star_search_done`), AI API를 호출합니다(`ai_call_start`, `ai_call_success`).
+4. `services/chat.py`가 같은 사용자의 최근 5쌍을 읽고, 스타 자료를 검색하거나 랜덤 추천이면 무작위로 한 명을 고른 뒤(`star_search_done`), AI API를 호출합니다(`ai_call_start`, `ai_call_success`).
 5. 답변에 출처 줄을 붙여 `chat_logs`에 저장하고(`db_save_success`) 응답합니다.
 
 실패하면 다음과 같이 처리합니다.
