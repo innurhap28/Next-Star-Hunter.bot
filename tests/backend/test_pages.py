@@ -94,3 +94,16 @@ def test_pages_preconnect_and_preload_fonts(client):
 def test_app_css_has_no_font_import(client):
     css = client.get("/static/css/app.css").text
     assert "@import" not in css
+
+
+def test_chat_page_has_account_menu_resizer_and_source_footer(client):
+    log_in(client)
+    html = client.get("/").text
+    assert 'aria-haspopup="menu"' in html and 'aria-controls="user-menu"' in html
+    assert 'href="/admin" hidden data-admin-link' in html
+    assert "data-menu-logout" in html
+    assert 'role="separator"' in html
+    assert 'aria-valuemin="200"' in html and 'aria-valuemax="480"' in html
+    assert "스타 정보 출처:" in html
+    assert 'href="https://namu.wiki/"' in html
+    assert 'href="https://creativecommons.org/licenses/by-nc-sa/2.0/kr/"' in html
