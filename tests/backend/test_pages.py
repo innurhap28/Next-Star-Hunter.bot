@@ -183,3 +183,15 @@ def test_chat_page_has_account_menu_resizer_and_source_footer(client):
     assert "스타 정보 출처:" in html
     assert 'href="https://namu.wiki/"' in html
     assert 'href="https://creativecommons.org/licenses/by-nc-sa/2.0/kr/"' in html
+
+
+def test_chat_assets_have_scroll_regions_and_loading_indicator(client):
+    css = client.get("/static/css/app.css").text
+    js = client.get("/static/js/chat.js").text
+    # 페이지는 고정하고 대화 목록·메시지 영역만 스크롤한다.
+    assert "body.chat-page" in css and "overflow: hidden" in css
+    assert ".loading-spinner" in css and "@keyframes loading-spin" in css
+    assert "prefers-reduced-motion" in css
+    assert "scrollRestoration" in js and "const scrollToBottom" in js
+    assert "답변을 준비하고 있어요…" in js
+    assert "nsh.sidebarOpen" in js
