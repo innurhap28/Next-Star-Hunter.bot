@@ -12,6 +12,7 @@
 | GET | `/health` | 없음 | 서버 상태 확인 |
 | GET | `/` | 로그인 (아니면 `/auth`로 이동) | 채팅 화면 (HTML) |
 | GET | `/auth` | 없음 | 로그인·회원가입 화면 (HTML) |
+| GET | `/admin` | 관리자 (아니면 `/auth` 또는 `/`로 이동) | 관리자 화면 (HTML) |
 | POST | `/api/auth/register` | 없음 | 회원가입 |
 | POST | `/api/auth/login` | 없음 | 로그인, 쿠키 발급, 이전 세션 교체 |
 | POST | `/api/auth/logout` | 로그인 | 로그아웃, 쿠키 삭제 |
@@ -71,7 +72,7 @@ HTTP 200
 {"status": "ok", "service": "next-star-hunter"}
 ```
 
-### GET /, GET /auth
+### GET /, GET /auth, GET /admin
 
 HTML 화면이라 Swagger에는 나오지 않습니다. 쿠키의 세션을 `user_sessions`와 비교해 이동할 곳을 정합니다.
 
@@ -82,6 +83,11 @@ HTML 화면이라 Swagger에는 나오지 않습니다. 쿠키의 세션을 `use
 | `GET /` (다른 곳의 로그인으로 세션이 끊김) | 303 | `Location: /auth?reason=session_replaced` |
 | `GET /auth` (로그인 상태) | 303 | `Location: /` |
 | `GET /auth` (그 밖) | 200 | 로그인·회원가입 화면. 끊긴 세션의 쿠키는 지웁니다 |
+| `GET /admin` (관리자로 로그인) | 200 | 관리자 화면 |
+| `GET /admin` (로그인 안 함, 세션 만료 / 세션이 끊김) | 303 | `Location: /auth` / `Location: /auth?reason=session_replaced` |
+| `GET /admin` (일반 사용자, `ADMIN_EMAIL` 비어 있음) | 303 | `Location: /` |
+
+관리자는 로그인한 사용자의 이메일이 `ADMIN_EMAIL`과 같을 때(대소문자 무시)입니다. 관리자 화면은 `GET /api/admin/stats`, `GET /api/admin/users`, `GET /api/admin/chats`를 불러 현황 카드, 사용자 표(50명씩), 사용자별·전체 최근 대화를 보여 줍니다. API가 `401`이면 `/auth`(세션이 끊겼으면 `/auth?reason=session_replaced`)로, `403 ADMIN_REQUIRED`면 `/`로 이동합니다.
 
 DB에 연결할 수 없으면 서명된 쿠키만 보고 화면을 열고, 화면 스크립트가 `GET /api/me`의 응답으로 다시 판단합니다. 정적 파일은 `/static/css/`, `/static/js/`로 제공합니다.
 

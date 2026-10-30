@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-    U[사용자 브라우저] -->|"화면 /, /auth"| A[FastAPI]
+    U[사용자 브라우저] -->|"화면 /, /auth, /admin"| A[FastAPI]
     U -->|"/api/*"| A
     A -->|"질문 + 최근 대화 + 스타 자료"| AI[copa AI API]
     AI --> A
@@ -71,4 +71,4 @@ backend/app/
 | 답변 저장 실패 | `db_save_failure`를 남기고 답변은 `saved: false`로 반환 |
 | 그 밖의 DB 오류 | `db_operation_failure`를 남기고 `503 DB_UNAVAILABLE` |
 
-화면의 공통 `<head>` 자산(폰트 preconnect·preload, `app.css`)은 `frontend/templates/_head_assets.html` 한 곳에 두고 `auth.html`, `chat.html` 이 include 합니다. 폰트는 Google Fonts 에서 DM Sans, Noto Sans KR 의 400·600·700 만 불러옵니다(`app.css` 에서 쓰는 굵기).
+화면의 공통 `<head>` 자산(폰트 preconnect·preload, `app.css`)은 `frontend/templates/_head_assets.html` 한 곳에 두고 `auth.html`, `chat.html`, `admin.html` 이 include 합니다. 폰트는 Google Fonts 에서 DM Sans, Noto Sans KR 의 400·600·700 만 불러옵니다(`app.css` 에서 쓰는 굵기).
