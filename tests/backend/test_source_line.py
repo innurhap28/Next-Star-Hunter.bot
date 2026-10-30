@@ -1,4 +1,5 @@
 """Source line handling: history stripping, model-written lines, and listed names."""
+import json
 from types import SimpleNamespace
 
 import httpx
@@ -48,7 +49,8 @@ def test_chat_shows_exactly_one_source_line_when_model_copies_it():
         r = client.post("/api/chat", json={"message": "안경 쓴 부산 출신 아이돌 추천해줘"})
     answer = r.json()["answer"]
     assert answer.count("출처:") == 1
-    assert answer == "부산돌을 추천해요.\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 부산돌"
+    assert answer == ("˗ˋˏ 부산돌 ˎˊ˗\n\n부산돌을 추천해요.\n\n"
+                      "출처: 나무위키(CC BY-NC-SA 2.0 KR) - 부산돌")
     e.dispose()
 
 
@@ -75,7 +77,7 @@ def test_source_line_falls_back_to_all_hits_when_no_name_is_in_the_answer():
     assert source_line(StarSearchResult(), "조유리") == ""
 
 
-def test_chat_source_line_lists_only_stars_the_answer_names():
+def test_chat_title_and_source_name_only_the_picked_star():
     fake = FakeAI()
     fake.handler = lambda request: httpx.Response(
         200, json={"content": [{"type": "text", "text": "부산돌이 잘 맞아요."}]})
@@ -86,6 +88,9 @@ def test_chat_source_line_lists_only_stars_the_answer_names():
         client.post("/api/auth/login", json=ACCOUNT)
         r = client.post("/api/chat", json={"message": "부산 출신 추천해줘"})
     answer = r.json()["answer"]
-    assert answer.endswith("\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 부산돌")
-    assert "부산배우" not in answer
+    block = json.loads(fake.requests[-1].content)["system"]
+    picked = [name for name in ("부산돌", "부산배우") if "\n1. " + name + " (" in block]
+    assert len(picked) == 1 and "\n2. " not in block
+    assert answer.startswith("˗ˋˏ " + picked[0] + " ˎˊ˗\n\n")
+    assert answer.endswith("\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - " + picked[0])
     e.dispose()
