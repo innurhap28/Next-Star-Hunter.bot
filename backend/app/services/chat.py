@@ -165,6 +165,22 @@ def _no_new_conditions(message: str) -> bool:
     return all(k in left_out for k in q.keywords)
 
 
+def _earlier_keywords(history, star: Optional[str]) -> list[str]:
+    """Content words ('안경') of the latest questions answered with this star.
+
+    Oldest first, so the words of the question that picked the star come first. A
+    follow-up about the same star keeps the chunks behind these words in the reference,
+    so the model does not take back a detail an earlier answer used.
+    """
+    questions: list[str] = []
+    for log in reversed(history):
+        if answered_star(log.answer) != star:
+            break
+        questions.append(log.question)
+    words = [k for question in reversed(questions) for k in parse_query(question).keywords]
+    return list(dict.fromkeys(words))
+
+
 def _recommended(answers) -> tuple[str, ...]:
     titles = (answered_star(answer) for answer in answers)
     return tuple(dict.fromkeys(t for t in titles if t))
@@ -192,7 +208,8 @@ def _find_reference(engine, message: str, history, request_id: str,
         return pick_star(found)
     if mode in ("same", "same_unless_named"):
         found = find_star(engine, previous_star, message, request_id=request_id,
-                          unless_other_named=mode == "same_unless_named")
+                          unless_other_named=mode == "same_unless_named",
+                          earlier_keywords=_earlier_keywords(history, previous_star))
         if found is not None:
             logger.info("star_pick request_id=%s mode=%s", request_id, mode)
             return found

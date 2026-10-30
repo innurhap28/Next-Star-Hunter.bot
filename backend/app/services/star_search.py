@@ -11,6 +11,7 @@ result and a star_search_failure log line.
 import logging
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -24,6 +25,8 @@ logger = logging.getLogger("next_star_hunter")
 
 MAX_STARS = 5
 MAX_SNIPPETS = 2
+# follow-up about the same star: profile, a chunk for the question, a chunk for earlier words
+FOLLOW_UP_SNIPPETS = 3
 SNIPPET_CHARS = 300
 CANDIDATE_LIMIT = 300  # stars whose chunks are scanned for keywords
 MEMBER_LIMIT = 20
@@ -430,13 +433,14 @@ def _members(conn, group_title: str) -> list[str]:
     return list(names)
 
 
-def _star(row: dict, snippets: list, members: Optional[list[str]] = None) -> dict:
+def _star(row: dict, snippets: list, members: Optional[list[str]] = None,
+          limit: int = MAX_SNIPPETS) -> dict:
     star = {k: row.get(k) for k in ("title", "kind", "group_name", "gender", "birth_year",
                                     "debut_year", "birthplace", "agency", "height_cm",
                                     "source_url")}
     star["aliases"] = [a for a in (row.get("aliases") or "").split("\n") if a]
     star["snippets"] = [{"section": s, "text": _snippet(c, k)} for s, c, k in
-                        snippets[:MAX_SNIPPETS]]
+                        snippets[:limit]]
     if members:
         star["members"] = members
     return star
@@ -770,15 +774,18 @@ def _profile_by_name(conn, name: str) -> Optional[dict]:
 
 
 def find_star(engine: Engine, name: Optional[str], message: str = "", *,
-              request_id: str = "", unless_other_named: bool = False
-              ) -> Optional[StarSearchResult]:
+              request_id: str = "", unless_other_named: bool = False,
+              earlier_keywords: Sequence[str] = ()) -> Optional[StarSearchResult]:
     """The star a previous answer recommended, as a one-star result for a follow-up.
 
     name is a document title or the name in a title line (exact title, alias, or the
-    title without its parenthesized part). The profile chunk and a chunk with a content
-    keyword of the message (or the next chunk) are the snippets. Returns None when the
-    star is not found, when unless_other_named and the message names another star, or on
-    any error. Never raises.
+    title without its parenthesized part). The snippets are the profile chunk, a chunk
+    with a content keyword of the message, and a chunk with one of earlier_keywords (the
+    content words of the earlier questions about this star, e.g. '안경'), so a detail an
+    earlier answer used is still in the reference. With no chunk for the message the
+    next chunk fills in. At most FOLLOW_UP_SNIPPETS. Returns None when the star is not
+    found, when unless_other_named and the message names another star, or on any error.
+    Never raises.
     """
     if not name or not name.strip():
         return None
@@ -798,7 +805,9 @@ def find_star(engine: Engine, name: Optional[str], message: str = "", *,
             own = {row["title"], display_name(row["title"]),
                    *(row.get("aliases") or "").split("\n")}
             keywords = [k for k in q.keywords if k not in own][:3]
-            hits = _keyword_hits(conn, [row["id"]], keywords).get(row["id"], [])
+            earlier = [k for k in dict.fromkeys(earlier_keywords)
+                       if k not in own and k not in keywords][:3]
+            found = _keyword_hits(conn, [row["id"]], keywords + earlier).get(row["id"], [])
             defaults = _default_snippets(conn, [row["id"]]).get(row["id"], [])
             members = _members(conn, row["title"]) if row["kind"] == "group" else None
             conn.rollback()
@@ -806,10 +815,19 @@ def find_star(engine: Engine, name: Optional[str], message: str = "", *,
         logger.error("star_lookup_failure request_id=%s error_type=%s",
                      request_id, type(error).__name__)
         return None
-    snippets = defaults
-    if hits:
-        snippets = defaults[:1] + [h for h in hits if h[1] not in {d[1] for d in defaults[:1]}]
-    star = _star(row, snippets, members)
+    matched = any(k in h[1] for h in found for k in keywords)
+    profile = {d[1] for d in defaults[:1]}
+    found = [h for h in found if h[1] not in profile]
+    hits = [h for h in found if any(k in h[1] for k in keywords)]
+    earlier_hits = [h for h in found if h not in hits]
+    picked = defaults[:1] + hits[:1] + earlier_hits[:1]
+    if not hits:
+        picked += defaults[1:]
+    snippets: list = []
+    for snip in picked:
+        if snip[1] not in {s[1] for s in snippets}:
+            snippets.append(snip)
+    star = _star(row, snippets, members, limit=FOLLOW_UP_SNIPPETS)
     star["anchor"] = False
-    star["matched"] = bool(hits)
+    star["matched"] = matched
     return StarSearchResult(stars=[star])
