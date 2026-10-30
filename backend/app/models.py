@@ -1,4 +1,4 @@
-"""User, login-session and chat-log tables agreed in the team DB plan, plus star reference data."""
+"""User, login-session, conversation and chat-log tables, plus star reference data."""
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -41,11 +41,32 @@ class UserSession(Base):
         DateTime(timezone=True), default=utc_now, nullable=False
     )
 
+class Conversation(Base):
+    """One chat room. Its chat_logs rows are the Q/A pairs, oldest first."""
+    __tablename__ = "conversations"
+    __table_args__ = (Index("ix_conversations_user_updated", "user_id", "updated_at"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    # Bumped every time an answer is saved, so the room list can be sorted by it.
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
 class ChatLog(Base):
     __tablename__ = "chat_logs"
     __table_args__ = (Index("ix_chat_logs_user_created", "user_id", "created_at", "id"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # NULL only for rows saved before conversations existed; init_db fills them in.
+    conversation_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

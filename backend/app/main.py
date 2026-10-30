@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings
 from .logging_config import LOGGER_NAME, setup_console_logging, setup_file_logging
-from .routers import auth, chat, logs, pages
+from .routers import admin, auth, chat, conversations, logs, pages
 
 setup_console_logging()
 logger = logging.getLogger(LOGGER_NAME)
@@ -119,6 +119,8 @@ def create_app(settings=None, session_factory=None, ai_transport=None):
     app.include_router(auth.router)
     app.include_router(chat.router)
     app.include_router(logs.router)
+    app.include_router(conversations.router)
+    app.include_router(admin.router)
     app.include_router(pages.router)
     return app
 

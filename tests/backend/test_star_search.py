@@ -262,7 +262,8 @@ def test_chat_puts_references_in_prompt_and_appends_source():
     block = system[system.index("<참고자료>"):]
     assert "부산돌" in block
     answer = r.json()["answer"]
-    assert answer == ANSWER + "\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 부산돌"
+    assert answer == ("˗ˋˏ 부산돌 ˎˊ˗\n\n" + ANSWER
+                      + "\n\n출처: 나무위키(CC BY-NC-SA 2.0 KR) - 부산돌")
     with factory() as db:
         assert db.get(ChatLog, r.json()["id"]).answer == answer
     e.dispose()

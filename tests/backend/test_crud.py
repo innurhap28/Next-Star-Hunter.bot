@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.crud.chat_logs import list_user_chats, recent_chat_pairs, save_chat_log
 from app.crud.users import create_user, get_user, get_user_by_email
 from app.database import Base
-from app.models import ChatLog
+from app.models import ChatLog, Conversation
 
 BASE_TIME = datetime(2026, 10, 1, tzinfo=timezone.utc)
 
@@ -45,13 +45,19 @@ def test_duplicate_email_raises_and_session_stays_usable(db):
 def test_chat_lists_are_per_user_and_oldest_first(db):
     me = create_user(db, "me@example.com", "h")
     other = create_user(db, "other@example.com", "h")
+    room = None
     for i in range(7):
-        save_chat_log(db, me.id, f"q{i}", f"a{i}", BASE_TIME + timedelta(minutes=i))
+        log = save_chat_log(db, me.id, f"q{i}", f"a{i}", BASE_TIME + timedelta(minutes=i),
+                            conversation=room)
+        room = room or db.get(Conversation, log.conversation_id)
     save_chat_log(db, other.id, "other-q", "other-a", BASE_TIME + timedelta(hours=1))
 
     assert [row.question for row in list_user_chats(db, me.id, 3)] == ["q4", "q5", "q6"]
-    pairs = recent_chat_pairs(db, me.id)
+    pairs = recent_chat_pairs(db, me.id, room.id)
     assert [row.question for row in pairs] == ["q2", "q3", "q4", "q5", "q6"]
+    assert recent_chat_pairs(db, me.id, None) == []
+    # another user's id never returns my rows
+    assert recent_chat_pairs(db, other.id, room.id) == []
     assert all(row.user_id == me.id for row in list_user_chats(db, me.id, 100))
 
 
@@ -73,3 +79,5 @@ def test_save_chat_log_rolls_back_on_db_error(db, monkeypatch):
         save_chat_log(db, user.id, "q", "a")
     monkeypatch.undo()
     assert db.scalar(select(func.count()).select_from(ChatLog)) == 0
+    # the new conversation made for that row is rolled back as well
+    assert db.scalar(select(func.count()).select_from(Conversation)) == 0

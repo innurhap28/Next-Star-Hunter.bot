@@ -24,7 +24,7 @@
 | --- | --- | --- |
 | Root Directory | `/` (비움) | 저장소 루트에 `requirements.txt`와 `backend/`가 같이 있다 |
 | Wait for CI | 켬 | GitHub의 CI가 통과한 커밋만 배포한다 |
-| Pre-deploy Command | `PYTHONPATH=backend python -m app.init_db` | 새 버전을 띄우기 전에 테이블을 만든다. 이미 있는 테이블은 그대로 두고 없는 테이블만 추가한다. 실패하면 배포가 멈추고 이전 버전이 계속 돈다 |
+| Pre-deploy Command | `PYTHONPATH=backend python -m app.init_db` | 새 버전을 띄우기 전에 테이블을 만든다. 이미 있는 테이블은 그대로 두고 없는 테이블만 추가한다. 대화방 기능 전 DB면 `chat_logs.conversation_id` 열을 더하고 기존 대화를 사용자별 `이전 대화` 방으로 묶는다(다시 실행해도 바뀌지 않음, [DATABASE.md](DATABASE.md#기존-db-업그레이드)). 실패하면 배포가 멈추고 이전 버전이 계속 돈다 |
 | Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend` | 앱 모듈이 `backend/app/main.py`라서 `--app-dir backend`가 필요하고, `$PORT`(Railway 주입)를 그대로 바인딩해야 라우팅이 붙는다 |
 | Healthcheck Path | `/health` | DB·AI 설정 없이 `{"status":"ok","service":"next-star-hunter"}`를 돌려준다. 이 응답이 와야 새 배포로 트래픽이 넘어간다 |
 | Restart Policy | `ON_FAILURE` | 앱이 죽었을 때만 재시작하고 정상 배포를 반복 재시작하지 않는다 |
@@ -43,6 +43,8 @@ Variables 탭에서 **이름만** 만들고 값은 팀이 직접 입력합니다
 | `SESSION_HTTPS_ONLY` | `true` | 세션 쿠키를 HTTPS에서만 보낸다 |
 | `ENABLE_API_DOCS` | `true` | `/docs`(Swagger UI)·`/openapi.json`을 열어 API를 확인할 수 있게 한다. 닫으려면 `false` |
 | `LOG_FILE_PATH` | 선택 | 영속 볼륨을 붙였을 때만 경로를 넣는다(예: `/data/logs/app.log`). 콘솔 로그와 같은 형식으로 파일에도 남고, 열 수 없으면 경고만 남긴다 |
+| `ADMIN_EMAIL` | 선택 | 관리자 계정 이메일. 이 계정만 `/api/admin/*`를 쓸 수 있다. 이 이메일로는 회원가입이 막혀 있어 Pre-deploy의 `init_db`로만 만들어진다. 이미 있는 계정을 지정하면 운영자 본인 계정인지 먼저 확인한다. 비우면 관리자 없음 |
+| `ADMIN_PASSWORD` | 선택 | 관리자 비밀번호(8자 이상). Pre-deploy의 `init_db`가 계정이 없을 때만 만들고 기존 비밀번호는 덮어쓰지 않으므로, 계정이 만들어진 뒤에 값을 바꿔도 반영되지 않는다 |
 | `PORT` | 넣지 않음 | Railway가 런타임에 자동 주입 |
 
 `DATABASE_URL` 스킴은 손대지 않아도 됩니다. `backend/app/database.py`의 `build_engine()`이
