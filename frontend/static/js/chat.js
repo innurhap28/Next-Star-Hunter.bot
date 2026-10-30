@@ -13,6 +13,13 @@
   const userAvatar = document.querySelector("[data-user-avatar]");
   const loginLink = document.querySelector("[data-login-link]");
   const logoutButton = document.querySelector("[data-logout-button]");
+  const menuButton = document.querySelector("[data-user-menu-button]");
+  const userMenu = document.querySelector("[data-user-menu]");
+  const userEmail = document.querySelector("[data-user-email]");
+  const adminLink = document.querySelector("[data-admin-link]");
+  const menuLogout = document.querySelector("[data-menu-logout]");
+  const layout = document.querySelector(".chat-layout");
+  const resizer = document.querySelector("[data-sidebar-resizer]");
 
   if (!form || !input || !list) return;
 
@@ -71,11 +78,34 @@
     list.lastElementChild?.scrollIntoView({ block: "end" });
   };
 
+  // The server puts "˗ˋˏ name ˎˊ˗" on the first line when it recommends a star.
+  const TITLE_LINE = /^˗ˋˏ (.+) ˎˊ˗$/;
+
   // User and AI text always goes through textContent, never innerHTML.
+  const setAnswer = (item, text) => {
+    const value = String(text ?? "");
+    const lineEnd = value.indexOf("\n");
+    const firstLine = (lineEnd === -1 ? value : value.slice(0, lineEnd)).trim();
+    const match = firstLine.match(TITLE_LINE);
+    if (!match) {
+      item.textContent = value;
+      return;
+    }
+    const title = document.createElement("strong");
+    title.className = "answer-title";
+    title.textContent = match[1];
+    const body = document.createElement("span");
+    body.className = "answer-body";
+    body.textContent = lineEnd === -1 ? "" : value.slice(lineEnd + 1).replace(/^\s*\n/, "");
+    item.replaceChildren(title, body);
+  };
+
   const addMessage = (text, role, options = {}) => {
     const item = document.createElement("div");
     item.className = `message message-${role}`;
-    item.textContent = text;
+    if (role === "assistant") setAnswer(item, text);
+    else item.textContent = text;
+    if (options.chatId != null) item.dataset.chatId = String(options.chatId);
     if (options.id != null) item.id = `chat-${options.id}`;
     if (options.time) item.title = formatTime(options.time);
     list.append(item);
@@ -93,16 +123,26 @@
 
   const renderSidebar = () => {
     if (!historyNav) return;
-    historyNav.querySelectorAll(".history-item").forEach((item) => item.remove());
+    historyNav.querySelectorAll(".history-entry").forEach((item) => item.remove());
     const recent = history.slice(-SIDEBAR_LIMIT).reverse();
     recent.forEach((chat) => {
+      const entry = document.createElement("div");
+      entry.className = "history-entry";
       const button = document.createElement("button");
       button.type = "button";
       button.className = "history-item";
       button.textContent = chat.question;
       button.title = formatTime(chat.created_at);
       button.addEventListener("click", () => showChat(chat.id));
-      historyNav.append(button);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "history-delete";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", `"${chat.question}" 대화 삭제`);
+      remove.title = "대화 삭제";
+      remove.addEventListener("click", () => deleteChat(chat.id, remove));
+      entry.append(button, remove);
+      historyNav.append(entry);
     });
     if (historyEmpty) historyEmpty.hidden = recent.length > 0;
   };
@@ -110,8 +150,8 @@
   const renderHistory = () => {
     list.replaceChildren();
     history.forEach((chat) => {
-      addMessage(chat.question, "user", { id: chat.id, time: chat.created_at });
-      addMessage(chat.answer, "assistant", { time: chat.created_at });
+      addMessage(chat.question, "user", { id: chat.id, chatId: chat.id, time: chat.created_at });
+      addMessage(chat.answer, "assistant", { chatId: chat.id, time: chat.created_at });
     });
     if (welcome) welcome.hidden = history.length > 0;
   };
@@ -146,6 +186,37 @@
     }
   };
 
+  const deleteChat = async (id, button) => {
+    if (!window.confirm("이 대화를 삭제할까요? 삭제한 대화는 되돌릴 수 없습니다.")) return;
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/me/chats/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      await readResponse(response);
+      history = history.filter((chat) => chat.id !== id);
+      list.querySelectorAll(`[data-chat-id="${id}"]`).forEach((item) => item.remove());
+      if (welcome) welcome.hidden = list.childElementCount > 0;
+      renderSidebar();
+      setStatus("대화를 삭제했어요.");
+    } catch (error) {
+      if (error.status === 401) {
+        goToLogin(error);
+        return;
+      }
+      button.disabled = false;
+      if (error.status === 404) {
+        // Already gone (deleted in another tab, for example): show the current list again.
+        setStatus("이미 삭제된 대화예요. 목록을 새로 불러왔어요.");
+        loadHistory();
+        return;
+      }
+      setStatus(`대화를 삭제하지 못했어요. ${describeError(error)}`, true);
+    }
+  };
+
   const loadCurrentUser = async () => {
     try {
       const response = await fetch("/api/me", {
@@ -156,6 +227,8 @@
       const name = user.email.split("@")[0];
       if (userLabel) userLabel.textContent = name;
       if (userAvatar) userAvatar.textContent = name.charAt(0).toUpperCase();
+      if (userEmail) userEmail.textContent = user.email;
+      if (adminLink) adminLink.hidden = user.is_admin !== true;
       if (loginLink) loginLink.hidden = true;
       if (logoutButton) logoutButton.hidden = false;
     } catch (error) {
@@ -167,16 +240,56 @@
     }
   };
 
-  logoutButton?.addEventListener("click", async () => {
-    logoutButton.disabled = true;
+  const logOut = async (button) => {
+    button.disabled = true;
     try {
       const response = await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
       // 401 means the session has already expired, so the user is logged out either way.
       if (response.status !== 401) await readResponse(response);
       goToLogin();
     } catch (error) {
-      logoutButton.disabled = false;
+      button.disabled = false;
       window.alert(describeError(error));
+    }
+  };
+
+  logoutButton?.addEventListener("click", () => logOut(logoutButton));
+  menuLogout?.addEventListener("click", () => logOut(menuLogout));
+
+  // Account menu under the profile button.
+  const menuItems = () => [...(userMenu?.querySelectorAll("[role=menuitem]") || [])].filter((item) => !item.hidden);
+  const isMenuOpen = () => Boolean(userMenu && !userMenu.hidden);
+
+  const setMenuOpen = (open, focusButton = false) => {
+    if (!userMenu || !menuButton) return;
+    userMenu.hidden = !open;
+    menuButton.setAttribute("aria-expanded", String(open));
+    if (open) menuItems()[0]?.focus();
+    else if (focusButton) menuButton.focus();
+  };
+
+  menuButton?.addEventListener("click", () => setMenuOpen(!isMenuOpen()));
+
+  menuButton?.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setMenuOpen(true);
+      if (event.key === "ArrowUp") menuItems().at(-1)?.focus();
+    }
+  });
+
+  userMenu?.addEventListener("keydown", (event) => {
+    const items = menuItems();
+    const index = items.indexOf(document.activeElement);
+    let next = null;
+    if (event.key === "ArrowDown") next = items[(index + 1) % items.length];
+    else if (event.key === "ArrowUp") next = items[(index - 1 + items.length) % items.length];
+    else if (event.key === "Home") next = items[0];
+    else if (event.key === "End") next = items.at(-1);
+    else if (event.key === "Tab") setMenuOpen(false);
+    if (next) {
+      event.preventDefault();
+      next.focus();
     }
   });
 
@@ -230,10 +343,13 @@
       const chat = await readResponse(response);
       pending.classList.remove("is-pending");
       pending.removeAttribute("aria-busy");
-      pending.textContent = chat.answer;
+      setAnswer(pending, chat.answer);
       pending.title = formatTime(chat.created_at);
       if (chat.saved && chat.id != null) {
-        pending.previousElementSibling?.setAttribute("id", `chat-${chat.id}`);
+        const question = pending.previousElementSibling;
+        question?.setAttribute("id", `chat-${chat.id}`);
+        if (question) question.dataset.chatId = String(chat.id);
+        pending.dataset.chatId = String(chat.id);
         history.push({ id: chat.id, question: chat.question, answer: chat.answer, created_at: chat.created_at });
         renderSidebar();
       } else {
@@ -293,6 +409,72 @@
     input.focus();
   });
 
+  // Sidebar width: drag the edge (mouse or touch) or use the arrow keys on it.
+  const SIDEBAR_MIN = 200;
+  const SIDEBAR_MAX = 480;
+  const SIDEBAR_STEP = 16;
+  const WIDTH_KEY = "nsh.sidebarWidth";
+
+  const clampWidth = (value) => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, value)));
+
+  const applySidebarWidth = (value) => {
+    const width = clampWidth(value);
+    layout?.style.setProperty("--sidebar-width", `${width}px`);
+    resizer?.setAttribute("aria-valuenow", String(width));
+    return width;
+  };
+
+  const saveSidebarWidth = (width) => {
+    try {
+      window.localStorage.setItem(WIDTH_KEY, String(width));
+    } catch {
+      // Storage can be blocked (private mode); the width just is not remembered.
+    }
+  };
+
+  const currentSidebarWidth = () => sidebar?.getBoundingClientRect().width || SIDEBAR_MIN;
+
+  if (resizer && sidebar && layout) {
+    try {
+      const saved = Number(window.localStorage.getItem(WIDTH_KEY));
+      if (saved) applySidebarWidth(saved);
+    } catch {
+      // Ignore unreadable storage and keep the default width.
+    }
+
+    let dragging = false;
+    resizer.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      resizer.setPointerCapture?.(event.pointerId);
+      resizer.classList.add("is-dragging");
+      event.preventDefault();
+    });
+    resizer.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      applySidebarWidth(event.clientX - sidebar.getBoundingClientRect().left);
+    });
+    const stopDragging = () => {
+      if (!dragging) return;
+      dragging = false;
+      resizer.classList.remove("is-dragging");
+      saveSidebarWidth(clampWidth(currentSidebarWidth()));
+    };
+    resizer.addEventListener("pointerup", stopDragging);
+    resizer.addEventListener("pointercancel", stopDragging);
+
+    resizer.addEventListener("keydown", (event) => {
+      const width = currentSidebarWidth();
+      let next = null;
+      if (event.key === "ArrowLeft") next = width - SIDEBAR_STEP;
+      else if (event.key === "ArrowRight") next = width + SIDEBAR_STEP;
+      else if (event.key === "Home") next = SIDEBAR_MIN;
+      else if (event.key === "End") next = SIDEBAR_MAX;
+      if (next === null) return;
+      event.preventDefault();
+      saveSidebarWidth(applySidebarWidth(next));
+    });
+  }
+
   function setSidebarOpen(open) {
     sidebar?.classList.toggle("is-open", open);
     menuToggle?.setAttribute("aria-expanded", String(open));
@@ -308,6 +490,10 @@
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isMenuOpen()) {
+      setMenuOpen(false, true);
+      return;
+    }
     if (event.key === "Escape" && sidebar?.classList.contains("is-open")) {
       setSidebarOpen(false);
       menuToggle?.focus();
@@ -315,6 +501,9 @@
   });
 
   document.addEventListener("click", (event) => {
+    if (isMenuOpen() && !userMenu.contains(event.target) && !menuButton?.contains(event.target)) {
+      setMenuOpen(false);
+    }
     if (!sidebar?.classList.contains("is-open")) return;
     if (sidebar.contains(event.target) || menuToggle?.contains(event.target)) return;
     setSidebarOpen(false);

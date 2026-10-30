@@ -23,12 +23,19 @@
           <p class="history-empty" data-history-empty>저장된 대화가 여기에 표시됩니다.</p>
         </nav>
         <div class="sidebar-footer">
-          <a class="user-profile" href="/auth">
+          <button class="user-profile" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu" data-user-menu-button>
             <span class="avatar" aria-hidden="true" data-user-avatar>{{ user_initial | default("게") }}</span>
             <span class="user-label" data-user-label>{{ user_name | default("게스트") }}</span>
-            <span class="user-menu" aria-hidden="true">···</span>
-          </a>
+            <span class="user-menu-dots" aria-hidden="true">···</span>
+            <span class="visually-hidden">계정 메뉴 열기</span>
+          </button>
+          <div class="user-menu" id="user-menu" role="menu" aria-label="계정 메뉴" hidden data-user-menu>
+            <p class="user-menu-email" role="presentation" data-user-email></p>
+            <a class="user-menu-item" role="menuitem" href="/admin" hidden data-admin-link>관리자 페이지</a>
+            <button class="user-menu-item" role="menuitem" type="button" data-menu-logout>로그아웃</button>
+          </div>
         </div>
+        <div class="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="사이드바 너비 조절" aria-controls="chat-sidebar" aria-valuemin="200" aria-valuemax="480" aria-valuenow="264" tabindex="0" data-sidebar-resizer></div>
       </aside>
 
       <main class="chat-main">
@@ -63,7 +70,10 @@
           </div>
         </form>
         <p class="chat-status" id="chat-status" role="status" data-chat-status></p>
-        <p class="chat-disclaimer">Next Star Hunter는 취향에 맞는 스타를 찾도록 도와주는 서비스입니다.</p>
+        <footer class="chat-footer">
+          <p class="chat-disclaimer">Next Star Hunter는 취향에 맞는 스타를 찾도록 도와주는 서비스입니다.</p>
+          <p class="chat-source">스타 정보 출처: <a href="https://namu.wiki/" target="_blank" rel="noopener noreferrer">나무위키</a> (<a href="https://creativecommons.org/licenses/by-nc-sa/2.0/kr/" target="_blank" rel="noopener noreferrer license">CC BY-NC-SA 2.0 KR</a>)</p>
+        </footer>
       </main>
     </div>
   </body>
