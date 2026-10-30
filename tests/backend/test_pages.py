@@ -73,3 +73,18 @@ def test_static_files_are_served(client):
 def test_pages_are_hidden_from_openapi(client):
     paths = client.app.openapi()["paths"]
     assert "/" not in paths and "/auth" not in paths
+
+
+def test_pages_preconnect_and_preload_fonts(client):
+    page = client.get("/auth").text
+    log_in(client)
+    for html in (page, client.get("/").text):
+        assert 'rel="preconnect" href="https://fonts.googleapis.com"' in html
+        assert 'rel="preconnect" href="https://fonts.gstatic.com" crossorigin' in html
+        assert 'rel="preload" as="style" href="https://fonts.googleapis.com/css2' in html
+        assert html.index("preload") < html.index("/static/css/app.css")
+
+
+def test_app_css_has_no_font_import(client):
+    css = client.get("/static/css/app.css").text
+    assert "@import" not in css

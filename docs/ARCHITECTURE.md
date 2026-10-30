@@ -70,3 +70,5 @@ backend/app/
 | AI 시간 초과, 오류 응답, 연결 실패 | `ai_call_failure`를 남기고 `504 AI_TIMEOUT` 또는 `502 AI_ERROR`(`LLM_API_KEY`가 없으면 `503 AI_NOT_CONFIGURED`). 질문은 저장하지 않음 |
 | 답변 저장 실패 | `db_save_failure`를 남기고 답변은 `saved: false`로 반환 |
 | 그 밖의 DB 오류 | `db_operation_failure`를 남기고 `503 DB_UNAVAILABLE` |
+
+화면의 공통 `<head>` 자산(폰트 preconnect·preload, `app.css`)은 `frontend/templates/_head_assets.html` 한 곳에 두고 `auth.html`, `chat.html` 이 include 합니다. 폰트는 Google Fonts 에서 DM Sans, Noto Sans KR 의 400·600·700 만 불러옵니다(`app.css` 에서 쓰는 굵기).

@@ -4,6 +4,7 @@ HTTP concerns stay in routers/chat.py. AIError from the AI call is raised as is
 so the router can map it to an HTTP response.
 """
 import logging
+import random
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,14 +20,18 @@ from .star_search import (
     StarSearchResult,
     format_reference,
     remove_source_lines,
+    remove_title_lines,
     search_stars,
     source_line,
+    title_line,
 )
 
 logger = logging.getLogger("next_star_hunter")
 CONTEXT_PAIRS = 5
+# Picks the one star to recommend. Tests replace it with a seeded random.Random.
+rng = random.Random()
 
-__all__ = ["AIError", "CONTEXT_PAIRS", "ChatResult", "answer_question"]
+__all__ = ["AIError", "CONTEXT_PAIRS", "ChatResult", "answer_question", "pick_star"]
 
 
 @dataclass
@@ -39,6 +44,21 @@ class ChatResult:
     saved: bool
 
 
+def pick_star(found: StarSearchResult, chooser=None) -> StarSearchResult:
+    """Keep one random star from the search result.
+
+    The group or the compared star is skipped when other stars exist, and stars whose
+    chunks contain a content keyword are preferred over the rest.
+    """
+    if len(found.stars) <= 1:
+        return found
+    pool = [s for s in found.stars if not s.get("anchor")] or found.stars
+    pool = [s for s in pool if s.get("matched")] or pool
+    star = (chooser or rng).choice(pool)
+    return StarSearchResult(stars=[star], missing_keywords=found.missing_keywords,
+                            conditions=found.conditions)
+
+
 def answer_question(db: Session, settings, user_id: int, message: str, *,
                     request_id: str, transport=None) -> ChatResult:
     """Answer one question and save it. Raises AIError when the AI call fails."""
@@ -47,7 +67,8 @@ def answer_question(db: Session, settings, user_id: int, message: str, *,
     # Star data lookup never raises; with no data the AI answers without references.
     found = StarSearchResult()
     if settings.llm_configured():
-        found = search_stars(db.get_bind(), message, previous, request_id=request_id)
+        found = pick_star(search_stars(db.get_bind(), message, previous,
+                                       request_id=request_id))
     # Message text and answers are never logged; only ids, timing, and error codes.
     logger.info("ai_call_start user_id=%s request_id=%s", user_id, request_id)
     started = time.monotonic()
@@ -60,10 +81,12 @@ def answer_question(db: Session, settings, user_id: int, message: str, *,
         raise
     latency_ms = int((time.monotonic() - started) * 1000)
     logger.info("ai_call_success request_id=%s latency_ms=%s", request_id, latency_ms)
-    credit = source_line(found, answer)
-    if credit:
-        # The model may copy a source line from the history; the server adds the only one.
-        answer = remove_source_lines(answer) + "\n\n" + credit
+    # The model may copy the title or source line from the history; the server adds
+    # the only ones.
+    answer = remove_title_lines(remove_source_lines(answer)) or answer
+    if found.stars:
+        name = found.stars[0]["title"]
+        answer = title_line(name) + "\n\n" + answer + "\n\n" + source_line(found)
 
     created_at = utc_now()
     try:

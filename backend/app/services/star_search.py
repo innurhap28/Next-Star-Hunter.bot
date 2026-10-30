@@ -449,11 +449,16 @@ def _search(conn, q: Query) -> StarSearchResult:
         else:
             result.missing_keywords = keywords
 
+    # the group or the named star the question compares with is context, not a pick
+    anchor = chosen[0][0]["id"] if chosen and (groups or (persons and q.similar)) else None
     chosen = chosen[:MAX_STARS]
     need_default = [row["id"] for row, snips, _ in chosen if not snips]
     defaults = _default_snippets(conn, need_default)
     for row, snips, members in chosen:
-        result.stars.append(_star(row, snips or defaults.get(row["id"], []), members))
+        item = _star(row, snips or defaults.get(row["id"], []), members)
+        item["anchor"] = row["id"] == anchor
+        item["matched"] = bool(snips)  # a content keyword was found in its chunks
+        result.stars.append(item)
     return result
 
 
@@ -540,6 +545,35 @@ def format_reference(result: StarSearchResult) -> str:
 
 
 SOURCE_PREFIX = "출처:"
+TITLE_LEFT = "˗ˋˏ"
+TITLE_RIGHT = "ˎˊ˗"
+# a line with the title marks, or a markdown heading the model wrote by itself
+_TITLE_LIKE = re.compile(r"[ˋˏˎˊ]|^\s*#{1,6}\s")
+_TITLE_LINE = re.compile(r"^\s*˗ˋˏ .* ˎˊ˗\s*$")
+
+
+def display_name(title: str) -> str:
+    """Document title without the trailing disambiguation ('산들(가수)' -> '산들')."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", title).strip() or title
+
+
+def title_line(title: str) -> str:
+    """The first line of an answer that recommends a star."""
+    return f"{TITLE_LEFT} {display_name(title)} {TITLE_RIGHT}"
+
+
+def remove_title_lines(text: str) -> str:
+    """Remove title-like lines the model wrote, and blank lines left at the edges."""
+    lines = [ln for ln in text.split("\n") if not _TITLE_LIKE.search(ln)]
+    return "\n".join(lines).strip("\n").rstrip()
+
+
+def strip_title_line(text: str) -> str:
+    """Drop the server's title line (and the blank lines after it) from a saved answer."""
+    lines = text.split("\n")
+    if lines and _TITLE_LINE.match(lines[0]):
+        return "\n".join(lines[1:]).lstrip("\n")
+    return text
 
 
 def strip_trailing_source(text: str) -> str:
