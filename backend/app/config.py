@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # 비어 있으면 콘솔에만 남기고, 경로가 있으면 같은 형식으로 파일에도 남긴다.
     LOG_FILE_PATH: str = ""
 
+    # 관리자 계정. 둘 다 있으면 init_db 가 계정이 없을 때만 만든다(기존 비밀번호는 덮어쓰지 않음).
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: SecretStr = SecretStr("")
+
     # AI API. 키가 없어도 서버는 뜨고, 채팅 기능만 llm_configured()로 막는다.
     LLM_API_KEY: SecretStr = SecretStr("")
     # 수업에서 쓰는 copa(Anthropic 방식) 기준. 모델은 sonnet 고정, haiku 만 예비로 허용.
@@ -33,6 +37,10 @@ class Settings(BaseSettings):
     def auth_configured(self) -> bool:
         return (len(self.SECRET_KEY.get_secret_value()) >= 32
                 and bool(self.DATABASE_URL.get_secret_value()))
+
+    def admin_email(self) -> str:
+        """Normalized like signup emails; empty means no admin account."""
+        return self.ADMIN_EMAIL.strip().casefold()
 
     def llm_configured(self) -> bool:
         return (bool(self.LLM_API_KEY.get_secret_value())

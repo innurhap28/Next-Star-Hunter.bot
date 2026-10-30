@@ -71,3 +71,16 @@ def get_current_user(request: Request, db=Depends(get_db)) -> User:
     if state == "stale":
         raise HTTPException(401, {"error": "LOGIN_REQUIRED", "message": "다시 로그인해주세요."})
     return user
+
+ADMIN_REQUIRED = {"error": "ADMIN_REQUIRED", "message": "관리자만 사용할 수 있습니다."}
+
+
+def is_admin(settings, user: User) -> bool:
+    """The user whose email matches ADMIN_EMAIL (case-insensitive). Empty means no admin."""
+    admin_email = settings.admin_email()
+    return bool(admin_email) and user.email.casefold() == admin_email
+
+def require_admin(request: Request, user=Depends(get_current_user)) -> User:
+    if not is_admin(request.app.state.settings, user):
+        raise HTTPException(403, ADMIN_REQUIRED)
+    return user
