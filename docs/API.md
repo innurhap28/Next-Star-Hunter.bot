@@ -121,7 +121,7 @@ HTTP 409
 | 상태 | `error` | 상황 |
 |---|---|---|
 | 403 | `ORIGIN_NOT_ALLOWED` | 다른 출처의 브라우저 요청 |
-| 409 | `EMAIL_EXISTS` | 이미 가입된 이메일 (대소문자 무시) |
+| 409 | `EMAIL_EXISTS` | 이미 가입된 이메일 (대소문자 무시), 또는 `ADMIN_EMAIL`과 같은 이메일 |
 | 422 | `VALIDATION_ERROR` | 이메일 형식, 비밀번호 길이, 알 수 없는 필드 |
 | 503 | `AUTH_NOT_CONFIGURED`, `DB_NOT_CONFIGURED`, `DB_UNAVAILABLE` | 서버 설정 또는 DB 문제 |
 
@@ -379,7 +379,7 @@ HTTP 404
 
 ## 관리자
 
-관리자 계정은 환경 변수 `ADMIN_EMAIL`, `ADMIN_PASSWORD`로 정합니다. 둘 다 있으면 `python -m app.init_db`가 그 이메일의 계정이 없을 때만 만들고, 이미 있으면(직접 가입한 경우 포함) 비밀번호를 바꾸지 않습니다. `ADMIN_PASSWORD`가 8자 미만이면 계정을 만들지 않고 경고만 출력합니다. 출력에는 `admin account ready` 또는 `admin account exists`만 남고 비밀번호는 남지 않습니다.
+관리자 계정은 환경 변수 `ADMIN_EMAIL`, `ADMIN_PASSWORD`로 정합니다. 둘 다 있으면 `python -m app.init_db`가 그 이메일의 계정이 없을 때만 만들고, 이미 있으면 비밀번호를 바꾸지 않습니다. 회원가입 API는 `ADMIN_EMAIL`과 같은 이메일을 `409 EMAIL_EXISTS`로 거부하므로(`ADMIN_PASSWORD`가 비어 있어도) 관리자 계정은 `init_db`로만 만들어집니다. 이 제한을 넣기 전부터 있던 계정을 `ADMIN_EMAIL`로 지정하는 경우에는 그 계정이 운영자 본인이 만든 것인지 먼저 확인해야 합니다. `ADMIN_PASSWORD`가 8자 미만이면 계정을 만들지 않고 경고만 출력합니다. 출력에는 `admin account ready` 또는 `admin account exists`만 남고 비밀번호는 남지 않습니다.
 
 관리자 API는 모두 로그인이 필요하고(`401 LOGIN_REQUIRED`, `SESSION_REPLACED`), 로그인한 계정이 관리자가 아니면 `403`입니다. 조회 데이터는 서버 로그에 남기지 않고, 요청마다 `admin_view user_id=<관리자 ID> path=<경로>` 한 줄만 남깁니다.
 

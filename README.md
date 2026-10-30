@@ -391,7 +391,7 @@ Windows PowerShell에서는 `Copy-Item .env.example .env`, `$env:PYTHONPATH = "b
 | `SESSION_HTTPS_ONLY` | 선택 | 세션 쿠키를 HTTPS에서만 보냄. 운영은 `true` | `false` |
 | `ENABLE_API_DOCS` | 선택 | `/docs`(Swagger UI), `/openapi.json` 노출 | `false` |
 | `LOG_FILE_PATH` | 선택 | 앱 로그를 이 파일에도 기록. 열 수 없으면 경고만 남기고 콘솔 로그는 계속 | 없음 |
-| `ADMIN_EMAIL` | 선택 | 관리자 계정 이메일. 이 이메일로 로그인하면 관리자 API를 쓸 수 있습니다(대소문자 무시). 비우면 관리자 없음 | 없음 |
+| `ADMIN_EMAIL` | 선택 | 관리자 계정 이메일. 이 이메일로 로그인하면 관리자 API를 쓸 수 있습니다(대소문자 무시). 이 이메일로는 회원가입할 수 없고 `init_db`로만 만들어집니다. 이미 있는 계정을 지정하면 운영자 본인 계정인지 먼저 확인하세요. 비우면 관리자 없음 | 없음 |
 | `ADMIN_PASSWORD` | 선택 | 관리자 계정 비밀번호(8자 이상). `init_db`가 계정이 없을 때만 이 값으로 만들고, 있는 계정의 비밀번호는 바꾸지 않습니다 | 없음 |
 
 `SECRET_KEY`나 `DATABASE_URL`이 없어도 서버는 뜨고 `/health`는 응답합니다. 이때 계정·채팅 API는 `503 AUTH_NOT_CONFIGURED`, `LLM_API_KEY`가 없으면 채팅만 `503 AI_NOT_CONFIGURED`로 응답합니다.
