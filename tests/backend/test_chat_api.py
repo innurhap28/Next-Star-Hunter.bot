@@ -14,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import Settings
 from app.database import Base
 from app.main import create_app
-from app.models import ChatLog, User
+from app.models import ChatLog, Conversation, User
 from app.services.ai_client import SYSTEM_PROMPT
 
 ACCOUNT = {"email": "chat-user@example.com", "password": "chat-test-password-123"}
@@ -82,7 +82,8 @@ def test_chat_saves_question_and_answer(api):
     r = client.post("/api/chat", json={"message": "  " + QUESTION + "  "})
     assert r.status_code == 200
     data = r.json()
-    assert set(data) == {"id", "question", "answer", "created_at", "saved"}
+    assert set(data) == {"id", "question", "answer", "created_at", "saved",
+                         "conversation_id"}
     assert data["question"] == QUESTION
     assert data["answer"] == ANSWER
     assert data["saved"] is True
@@ -91,6 +92,9 @@ def test_chat_saves_question_and_answer(api):
         row = db.get(ChatLog, data["id"])
         user = db.scalar(select(User))
         assert (row.user_id, row.question, row.answer) == (user.id, QUESTION, ANSWER)
+        assert row.conversation_id == data["conversation_id"]
+        room = db.get(Conversation, row.conversation_id)
+        assert (room.user_id, room.title) == (user.id, QUESTION)
 
 
 def test_anthropic_request_format(api):
@@ -135,13 +139,18 @@ def test_context_uses_latest_five_pairs_oldest_first(api):
         other = User(email="other@example.com", password_hash="x")
         db.add(other)
         db.flush()
+        room = Conversation(user_id=user_id, title="room")
+        db.add(room)
+        db.flush()
+        room_id = room.id
         for i in range(7):
-            db.add(ChatLog(user_id=user_id, question=f"q{i}", answer=f"a{i}",
-                           created_at=base + timedelta(minutes=i)))
+            db.add(ChatLog(user_id=user_id, conversation_id=room_id, question=f"q{i}",
+                           answer=f"a{i}", created_at=base + timedelta(minutes=i)))
         db.add(ChatLog(user_id=other.id, question="other-q", answer="other-a",
                        created_at=base + timedelta(hours=1)))
         db.commit()
-    assert client.post("/api/chat", json={"message": QUESTION}).status_code == 200
+    r = client.post("/api/chat", json={"message": QUESTION, "conversation_id": room_id})
+    assert r.status_code == 200 and r.json()["conversation_id"] == room_id
     expected = []
     for i in range(2, 7):
         expected += [{"role": "user", "content": f"q{i}"},
@@ -242,6 +251,7 @@ def test_db_save_failure_still_returns_answer(api, monkeypatch, caplog):
     data = r.json()
     assert data["saved"] is False
     assert data["id"] is None
+    assert data["conversation_id"] is None
     assert data["answer"] == ANSWER
     assert "db_save_failure" in caplog.text
     assert "OperationalError" in caplog.text
@@ -266,7 +276,7 @@ def test_openapi_declares_chat_errors(api):
     schema = client.get("/openapi.json").json()
     assert "HTTPValidationError" not in json.dumps(schema)
     responses = schema["paths"]["/api/chat"]["post"]["responses"]
-    assert {int(code) for code in responses} == {200, 401, 403, 422, 502, 503, 504}
+    assert {int(code) for code in responses} == {200, 401, 403, 404, 422, 502, 503, 504}
     declared = responses["422"]["content"]["application/json"]
     assert declared["schema"]["$ref"] == "#/components/schemas/ValidationErrorResponse"
     r = client.post("/api/chat", json={"message": ""})

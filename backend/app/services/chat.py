@@ -1,7 +1,8 @@
 """Chat flow: recent context, star search, AI call, source line, and log saving.
 
-HTTP concerns stay in routers/chat.py. AIError from the AI call is raised as is
-so the router can map it to an HTTP response.
+Context and follow-up stars come only from the same conversation. HTTP concerns
+stay in routers/chat.py. AIError from the AI call and ConversationNotFound are
+raised as is so the router can map them to an HTTP response.
 """
 import logging
 import random
@@ -14,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..crud.chat_logs import recent_chat_pairs, save_chat_log
+from ..crud.conversations import conversation_answers, get_user_conversation
 from ..models import utc_now
 from .ai_client import RANDOM_PICK_NOTE, AIError, ask_ai
 from .star_search import (
@@ -44,8 +46,12 @@ CONTEXT_PAIRS = 5
 # Picks the one star to recommend. Tests replace it with a seeded random.Random.
 rng = random.Random()
 
-__all__ = ["AIError", "CONTEXT_PAIRS", "ChatResult", "answer_question", "follow_up_mode",
-           "pick_star"]
+__all__ = ["AIError", "CONTEXT_PAIRS", "ChatResult", "ConversationNotFound",
+           "answer_question", "follow_up_mode", "pick_star"]
+
+
+class ConversationNotFound(Exception):
+    """The conversation_id is missing or belongs to another user (same 404 for both)."""
 
 
 @dataclass
@@ -56,6 +62,8 @@ class ChatResult:
     answer: str
     created_at: datetime
     saved: bool
+    # None only when the DB save failed.
+    conversation_id: Optional[int] = None
 
 
 def pick_star(found: StarSearchResult, chooser=None, exclude=()) -> StarSearchResult:
@@ -157,12 +165,16 @@ def _no_new_conditions(message: str) -> bool:
     return all(k in left_out for k in q.keywords)
 
 
-def _recommended(history) -> tuple[str, ...]:
-    titles = (answered_star(log.answer) for log in history)
+def _recommended(answers) -> tuple[str, ...]:
+    titles = (answered_star(answer) for answer in answers)
     return tuple(dict.fromkeys(t for t in titles if t))
 
 
-def _find_reference(engine, message: str, history, request_id: str) -> StarSearchResult:
+def _find_reference(engine, message: str, history, request_id: str,
+                    answers=None) -> StarSearchResult:
+    """answers: every answer of the conversation (defaults to the context history)."""
+    if answers is None:
+        answers = [log.answer for log in history]
     previous_star = answered_star(history[-1].answer) if history else None
     mode = follow_up_mode(message, previous_star,
                           lambda word: is_star_name(engine, word, request_id=request_id))
@@ -171,7 +183,7 @@ def _find_reference(engine, message: str, history, request_id: str) -> StarSearc
         mode = "random"
     if mode == "random":
         logger.info("star_pick request_id=%s mode=%s", request_id, mode)
-        return random_star(engine, _recommended(history), request_id=request_id)
+        return random_star(engine, _recommended(answers), request_id=request_id)
     if mode == "similar":
         # '그 사람이랑 비슷한 가수': search with the previous star's name in place of '그 사람'
         named = REFER_RE.sub(display_name(previous_star), message, count=1)
@@ -188,7 +200,7 @@ def _find_reference(engine, message: str, history, request_id: str) -> StarSearc
         mode = "search"
     exclude: tuple[str, ...] = ()
     if mode == "another":
-        exclude = _recommended(history)
+        exclude = _recommended(answers)
     logger.info("star_pick request_id=%s mode=%s", request_id, mode)
     found = search_stars(engine, message, _condition_question(history),
                          request_id=request_id, exclude=exclude)
@@ -196,13 +208,24 @@ def _find_reference(engine, message: str, history, request_id: str) -> StarSearc
 
 
 def answer_question(db: Session, settings, user_id: int, message: str, *,
-                    request_id: str, transport=None) -> ChatResult:
-    """Answer one question and save it. Raises AIError when the AI call fails."""
-    history = recent_chat_pairs(db, user_id, CONTEXT_PAIRS)
+                    request_id: str, transport=None,
+                    conversation_id: Optional[int] = None) -> ChatResult:
+    """Answer one question and save it in the conversation (a new one when None).
+
+    Raises ConversationNotFound before the AI call when the id is not the user's,
+    and AIError when the AI call fails.
+    """
+    conversation = None
+    if conversation_id is not None:
+        conversation = get_user_conversation(db, user_id, conversation_id)
+        if conversation is None:
+            raise ConversationNotFound()
+    history = recent_chat_pairs(db, user_id, conversation_id, CONTEXT_PAIRS)
     # Star data lookup never raises; with no data the AI answers without references.
     found = StarSearchResult()
     if settings.llm_configured():
-        found = _find_reference(db.get_bind(), message, history, request_id)
+        found = _find_reference(db.get_bind(), message, history, request_id,
+                                conversation_answers(db, conversation_id))
     # Message text and answers are never logged; only ids, timing, and error codes.
     logger.info("ai_call_start user_id=%s request_id=%s", user_id, request_id)
     started = time.monotonic()
@@ -227,14 +250,16 @@ def answer_question(db: Session, settings, user_id: int, message: str, *,
 
     created_at = utc_now()
     try:
-        log = save_chat_log(db, user_id, message, answer, created_at)
+        log = save_chat_log(db, user_id, message, answer, created_at,
+                            conversation=conversation)
     except SQLAlchemyError as error:
         # The answer is already made, so return it and tell the client it was not saved.
         logger.error("db_save_failure user_id=%s request_id=%s error_type=%s",
                      user_id, request_id, type(error).__name__)
         return ChatResult(id=None, question=message, answer=answer,
                           created_at=created_at, saved=False)
-    logger.info("db_save_success user_id=%s chat_id=%s request_id=%s",
-                user_id, log.id, request_id)
+    logger.info("db_save_success user_id=%s chat_id=%s conversation_id=%s request_id=%s",
+                user_id, log.id, log.conversation_id, request_id)
     return ChatResult(id=log.id, question=log.question, answer=log.answer,
-                      created_at=log.created_at, saved=True)
+                      created_at=log.created_at, saved=True,
+                      conversation_id=log.conversation_id)
