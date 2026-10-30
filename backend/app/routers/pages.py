@@ -39,9 +39,9 @@ def login_state(request: Request) -> str:
     return page_login(request)[0]
 
 def is_admin_email(request: Request, email: Optional[str]) -> bool:
-    # getattr: ADMIN_EMAIL 설정이 없는 환경에서도 관리자 없음으로 동작하게 한다.
-    admin_email = (getattr(request.app.state.settings, "ADMIN_EMAIL", "") or "").strip().lower()
-    return bool(admin_email) and bool(email) and email.strip().lower() == admin_email
+    # API 의 is_admin 과 같은 기준(ADMIN_EMAIL, 대소문자 무시)을 쓴다.
+    admin_email = request.app.state.settings.admin_email()
+    return bool(admin_email) and bool(email) and email.casefold() == admin_email
 
 @router.get("/")
 def chat_page(request: Request):

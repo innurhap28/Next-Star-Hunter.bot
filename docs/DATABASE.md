@@ -67,6 +67,8 @@ erDiagram
 | `password_hash` | 문자열 | 비밀번호 해시. 원문 비밀번호는 저장하지 않습니다. |
 | `created_at` | 시간대 포함 시각 | 계정 생성 시각 |
 
+관리자 계정도 같은 `users` 행입니다. 관리자 여부는 DB에 저장하지 않고 로그인한 이메일이 환경 변수 `ADMIN_EMAIL`과 같은지로 판단하므로 스키마 변경은 없습니다. `init_db`는 `ADMIN_EMAIL`, `ADMIN_PASSWORD`가 있고 그 계정이 없을 때만 행을 하나 추가합니다.
+
 ### `user_sessions`
 
 계정마다 지금 유효한 로그인 하나를 기록합니다. 새로 로그인하면 행을 덮어쓰므로 이전 세션은 `SESSION_REPLACED`로 끊깁니다([API 명세](API.md#계정당-세션-하나)).
@@ -89,7 +91,7 @@ erDiagram
 | `answer` | 텍스트 | AI가 생성한 응답. 스타 자료를 쓴 경우 서버가 붙인 출처 줄까지 포함 |
 | `created_at` | 시간대 포함 시각 | 대화 생성 시각 |
 
-AI 답변을 받은 대화만 저장합니다. 사용자별 로그 조회는 `user_id`로 제한합니다. 최신 기록을 빠르게 가져오도록 `(user_id, created_at, id)` 인덱스 `ix_chat_logs_user_created`를 둡니다.
+AI 답변을 받은 대화만 저장합니다. 사용자별 로그 조회와 삭제(`DELETE /api/me/chats/{chat_id}`)는 `user_id`로 제한합니다. 관리자 API는 `user_id`로 묶어 사용자별 대화 수와 마지막 대화 시각을 집계합니다. 최신 기록을 빠르게 가져오도록 `(user_id, created_at, id)` 인덱스 `ix_chat_logs_user_created`를 둡니다.
 
 ### `star_profiles`
 

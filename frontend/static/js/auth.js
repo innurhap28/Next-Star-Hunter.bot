@@ -83,6 +83,12 @@
       if (!form.reportValidity()) return;
 
       const isSignup = form.dataset.authPanel === "signup";
+      // The confirmation is checked in the browser only; the API never receives it.
+      if (isSignup && form.elements.password.value !== form.elements.password_confirm.value) {
+        setMessage("비밀번호가 서로 달라요. 같은 비밀번호를 다시 입력해 주세요.", true);
+        form.elements.password_confirm.focus();
+        return;
+      }
       const submitButton = form.querySelector('button[type="submit"]');
       const email = form.elements.email.value.trim();
       const password = form.elements.password.value;

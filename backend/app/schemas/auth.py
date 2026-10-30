@@ -31,3 +31,7 @@ class UserPublic(BaseModel):
     id: int
     email: str
     created_at: datetime
+
+class MePublic(UserPublic):
+    """GET /api/me: the account plus whether it may use the admin pages."""
+    is_admin: bool

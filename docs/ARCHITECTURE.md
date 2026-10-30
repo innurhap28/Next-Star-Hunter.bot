@@ -35,10 +35,10 @@ backend/app/
 ├── security.py         # 비밀번호 해시·검증
 ├── openapi_errors.py   # Swagger 에 보일 오류 응답 예시
 ├── init_db.py          # 테이블 생성 스크립트 (python -m app.init_db)
-├── routers/            # HTTP 경로: auth.py(계정), chat.py(채팅), logs.py(대화 기록), pages.py(화면)
+├── routers/            # HTTP 경로: auth.py(계정), chat.py(채팅), logs.py(대화 기록 조회·삭제), admin.py(관리자 조회), pages.py(화면)
 ├── services/           # 업무 흐름: chat.py(채팅 처리), ai_client.py(AI API 호출), star_search.py(스타 자료 검색)
 ├── crud/               # DB 접근 함수: users.py, sessions.py, chat_logs.py
-└── schemas/            # 요청·응답 Pydantic 스키마: auth.py, chat.py, logs.py, errors.py
+└── schemas/            # 요청·응답 Pydantic 스키마: auth.py, chat.py, logs.py, admin.py, errors.py
 ```
 
 계층마다 맡는 일은 다음과 같습니다.
@@ -52,7 +52,7 @@ backend/app/
 | `models.py` | DB 테이블 정의(SQLAlchemy) |
 | `dependencies.py` | 요청마다 쓰는 DB 세션과 로그인 사용자 확인 |
 
-계정 API(`routers/auth.py`)와 대화 기록 조회(`routers/logs.py`)는 흐름이 짧아 라우터가 `crud/` 를 바로 부릅니다. 스타 데이터 검색 쿼리는 검색 로직과 붙어 있어 `services/star_search.py` 에 그대로 둡니다. 로그 이벤트 이름(`ai_call_start`, `db_save_success` 등)은 서비스로 옮긴 뒤에도 같습니다.
+계정 API(`routers/auth.py`), 대화 기록 조회·삭제(`routers/logs.py`), 관리자 조회(`routers/admin.py`)는 흐름이 짧아 라우터가 `crud/` 를 바로 부릅니다. 관리자 API는 `dependencies.require_admin` 이 로그인 확인 뒤 이메일을 `ADMIN_EMAIL` 과 비교해 아니면 403 `ADMIN_REQUIRED` 로 막습니다. 스타 데이터 검색 쿼리는 검색 로직과 붙어 있어 `services/star_search.py` 에 그대로 둡니다. 로그 이벤트 이름(`ai_call_start`, `db_save_success` 등)은 서비스로 옮긴 뒤에도 같습니다.
 
 ## 질문 처리 흐름
 
