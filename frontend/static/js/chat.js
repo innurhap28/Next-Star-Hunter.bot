@@ -93,7 +93,7 @@
     }
     const title = document.createElement("strong");
     title.className = "answer-title";
-    title.textContent = match[1];
+    title.textContent = firstLine;
     const body = document.createElement("span");
     body.className = "answer-body";
     body.textContent = lineEnd === -1 ? "" : value.slice(lineEnd + 1).replace(/^\s*\n/, "");

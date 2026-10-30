@@ -163,6 +163,7 @@ button { color: inherit; }
 .admin-chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; border-bottom: 1px solid #f0ede8; }
 .admin-chat:last-child { border-bottom: 0; }
 .admin-chat .message { margin: 0; }
+.admin-chat .answer-title { margin-bottom: 8px; }
 .admin-chat-meta { color: #9b948b; font-size: 11px; }
 .admin-empty { margin: 8px 0; color: #9b948b; font-size: 12px; }
 .admin-main .chat-status { width: 100%; margin: 0; }
