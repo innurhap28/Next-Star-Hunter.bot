@@ -43,6 +43,8 @@ Variables 탭에서 **이름만** 만들고 값은 팀이 직접 입력합니다
 | `SESSION_HTTPS_ONLY` | `true` | 세션 쿠키를 HTTPS에서만 보낸다 |
 | `ENABLE_API_DOCS` | `true` | `/docs`(Swagger UI)·`/openapi.json`을 열어 API를 확인할 수 있게 한다. 닫으려면 `false` |
 | `LOG_FILE_PATH` | 선택 | 영속 볼륨을 붙였을 때만 경로를 넣는다(예: `/data/logs/app.log`). 콘솔 로그와 같은 형식으로 파일에도 남고, 열 수 없으면 경고만 남긴다 |
+| `ADMIN_EMAIL` | 선택 | 관리자 계정 이메일. 이 계정만 `/api/admin/*`를 쓸 수 있다. 비우면 관리자 없음 |
+| `ADMIN_PASSWORD` | 선택 | 관리자 비밀번호(8자 이상). Pre-deploy의 `init_db`가 계정이 없을 때만 만들고 기존 비밀번호는 덮어쓰지 않으므로, 계정이 만들어진 뒤에 값을 바꿔도 반영되지 않는다 |
 | `PORT` | 넣지 않음 | Railway가 런타임에 자동 주입 |
 
 `DATABASE_URL` 스킴은 손대지 않아도 됩니다. `backend/app/database.py`의 `build_engine()`이
