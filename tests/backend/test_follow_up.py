@@ -11,7 +11,7 @@ from test_star_search import chat_client, chat_engine, engine  # noqa: F401
 from app.models import ChatLog, User
 from app.services import chat as chat_service
 from app.services.chat import follow_up_mode
-from app.services.star_search import answered_star, find_star
+from app.services.star_search import answered_star, find_star, is_star_name
 
 SOURCE = "출처: 나무위키(CC BY-NC-SA 2.0 KR) - "
 REPLY = "응 알려줄게 ✨"
@@ -132,6 +132,13 @@ def test_answered_star_reads_the_source_or_title_line():
     ("다른 사람 추천해줘", "another"),
     ("한 명 더", "another"),
     ("강혜원 말고", "another"),
+    ("강혜원은 말고 다른 애", "another"),
+    ("부산돌 말고", "another"),
+    ("그 사람 말고 추천해줘", "another"),
+    ("걔 말고", "another"),
+    ("말고 다른 애 없어?", "another"),
+    ("다른 애로 바꿔줘", "another"),
+    ("바꿔줘", "another"),
     ("또 추천해줘", "another"),
     ("그 사람 어떤 그룹 출신이야?", "same"),
     ("걔는 키 커?", "same"),
@@ -140,13 +147,35 @@ def test_answered_star_reads_the_source_or_title_line():
     ("그분 얘기 더 해줘", "same"),
     ("더 알려줘", "same_unless_named"),
     ("노래 잘해?", "same_unless_named"),
+    ("노래 말고 다른 특기 있어?", "same_unless_named"),
+    ("머리 바꿔본 적 있어?", "same_unless_named"),
+    ("스타일 바꿔본 적 있어?", "same_unless_named"),
+    ("연기 말고 노래도 해?", "same_unless_named"),
+    ("안경 쓴 애 있어?", "search"),
+    ("그 사람이랑 비슷한 가수 추천해줘", "similar"),
+    ("걔랑 비슷한 사람", "similar"),
     ("서울 출신 배우 추천해줘", "search"),
     ("그 중에 보조개 있는 사람", "search"),
     ("싱어송라이터 추천해줘", "search"),
     ("아이유랑 비슷한 가수", "search"),
 ])
 def test_follow_up_mode(message, mode):
-    assert follow_up_mode(message, "부산돌") == mode
+    assert follow_up_mode(message, "부산돌", lambda word: word in ("강혜원", "강혜원은")) == mode
+
+
+def test_name_before_malgo_is_checked_against_the_star_data(engine):  # noqa: F811
+    assert follow_up_mode("나연 말고", "부산돌",
+                          lambda word: is_star_name(engine, word)) == "another"
+    assert follow_up_mode("노래 말고 다른 특기 있어?", "부산돌",
+                          lambda word: is_star_name(engine, word)) == "same_unless_named"
+    assert is_star_name(engine, "임나연은") and not is_star_name(engine, "노래")
+
+
+def test_similar_to_the_previous_star_searches_around_that_star(monkeypatch):
+    before = [("발라드 가수 추천해줘", "˗ˋˏ 아이유 ˎˊ˗\n\n추천!\n\n" + SOURCE + "아이유")]
+    [(answer, system)] = talk(["그 사람이랑 비슷한 가수 추천해줘"], monkeypatch, before=before)
+    assert picked(answer) not in (None, "아이유")
+    assert "아이유와 성별·활동 분야·데뷔 시기가 비슷한 스타" in system
 
 
 def test_without_a_previous_star_every_question_is_a_search():

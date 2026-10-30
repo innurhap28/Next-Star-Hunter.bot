@@ -84,16 +84,29 @@ STOPWORDS = {
     "그분", "이분",
 }
 TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣]+")
-# '다른 사람', '한 명 더', '또 추천', '강혜원 말고', '바꿔줘': a new star is wanted
+_PERSON = r"(?:사람|애|친구|분|멤버|스타|아이돌|배우|가수|연예인)"
+# '다른 사람', '한 명 더', '또 추천', '그 사람 말고', '말고 다른 애', '다른 애로 바꿔줘',
+# '바꿔줘': a new star is wanted. '말고'/'바꿔' alone are not enough ('노래 말고 다른 특기',
+# '머리 바꿔본 적 있어?' ask about the same star); a name before '말고' is checked
+# against the star data with MALGO_NAME_RE.
 ANOTHER_RE = re.compile(r"다른\s*(?:사람|애|친구|분|멤버|스타|아이돌|배우|가수|연예인|누구)"
                         r"|딴\s*(?:사람|애|친구|분)|또\s*(?:다른|추천|누구|있어)"
-                        r"|한\s*명\s*더|하나\s*더|말고|바꿔|새로운\s*사람")
+                        r"|한\s*명\s*더|하나\s*더|새로운\s*사람"
+                        r"|(?<![가-힣])(?:(?:그|이|저)\s*)?(?:" + _PERSON + r"|걔|얘|그녀)"
+                        r"\s*(?:은|는|이|가)?\s*말고"
+                        r"|말고\s*(?:다른\s*" + _PERSON + r"|딴|누구|추천)"
+                        r"|(?<![가-힣])" + _PERSON + r"\s*(?:으로|로|을|를)?\s*바꿔"
+                        r"|^\s*바꿔\s*(?:줘|주세요|봐)?\s*[.!?~]*\s*$")
+# '강혜원 말고': the word before '말고' (a star name only when the data says so)
+MALGO_NAME_RE = re.compile(r"([0-9A-Za-z가-힣]+)\s*말고")
 _AFTER_REF = r"(?=$|[^가-힣]|[은는이가을를의도랑와과한에])"
 # '그 사람', '걔', '그 애', '이 사람', '그녀', '그분', '그 친구', '얘': the star just recommended
 REFER_RE = re.compile(r"(?<![가-힣])(?:(?:그|이|저)\s*(?:사람|애|친구|분|아이돌|배우|가수|멤버)"
                       + _AFTER_REF + r"|(?:걔|얘|그녀|그분|이분|저분)" + _AFTER_REF + ")")
-# words that ask the bot to find someone ("추천해줘", "누구 있어?", "그 중에 … 사람")
-ASK_PICK_RE = re.compile(r"추천|찾아|누구|누가|있어|있나|있을까|중에|사람|멤버")
+# words that ask the bot to find someone ("추천해줘", "누구 있어?", "그 중에 … 사람",
+# "안경 쓴 애"). '있어?' alone asks about the same star ('다른 특기 있어?').
+ASK_PICK_RE = re.compile(r"추천|찾아|누구|누가|중에|사람|멤버"
+                         r"|(?:쓴|있는|없는|하는|한|닮은|같은)\s*(?:애|친구|분|아이돌|배우|가수)")
 
 
 @dataclass
@@ -235,6 +248,27 @@ def _find_named(conn, tokens: list[str]) -> list[dict]:
     rows = conn.execute(select(StarProfile.__table__).where(cond).limit(10)).mappings().all()
     # a matched name may be a word that is also a keyword; keep the most specific ones
     return [dict(r) for r in rows]
+
+
+def is_star_name(engine: Engine, word: str, request_id: str = "") -> bool:
+    """True when the word (or the word without josa) is a star title or alias.
+
+    Never raises; failures give False.
+    """
+    words = list(dict.fromkeys(w for w in (word, strip_josa(word)) if len(w) >= 2))
+    if not words:
+        return False
+    try:
+        with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                conn.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+            named = _find_named(conn, words)
+            conn.rollback()
+    except Exception as error:  # the chat must work without star data
+        logger.error("star_lookup_failure request_id=%s error_type=%s",
+                     request_id, type(error).__name__)
+        return False
+    return bool(named)
 
 
 def _structured_filters(q: Query, chunks_alias):
