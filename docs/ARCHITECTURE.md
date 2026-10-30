@@ -72,3 +72,5 @@ backend/app/
 | 그 밖의 DB 오류 | `db_operation_failure`를 남기고 `503 DB_UNAVAILABLE` |
 
 화면의 공통 `<head>` 자산(폰트 preconnect·preload, `app.css`)은 `frontend/templates/_head_assets.html` 한 곳에 두고 `auth.html`, `chat.html`, `admin.html` 이 include 합니다. 폰트는 Google Fonts 에서 DM Sans, Noto Sans KR 의 400·600·700 만 불러옵니다(`app.css` 에서 쓰는 굵기).
+
+채팅 화면은 페이지 전체가 스크롤되지 않습니다. 사이드바의 대화 목록과 가운데 메시지 영역(`.conversation`)이 각자 스크롤되고, 입력창과 왼쪽 아래 사용자 프로필은 항상 보입니다. 메시지 영역은 질문을 보냈을 때, 답변이나 오류가 왔을 때, 처음 기록을 불러왔을 때 `scrollToBottom()` 으로 맨 아래로 내려갑니다. 새로고침 때 브라우저의 스크롤 복원은 끕니다(`history.scrollRestoration = "manual"`). 답변을 기다리는 동안에는 스피너와 "답변을 준비하고 있어요…"를 보여 주고, 3초가 지나면 문구를 3초마다 바꿉니다. 모바일 사이드바를 열어 둔 상태는 `localStorage`(`nsh.sidebarOpen`)에 남겨 새로고침해도 유지합니다.

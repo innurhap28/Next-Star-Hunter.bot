@@ -20,6 +20,7 @@
   const menuLogout = document.querySelector("[data-menu-logout]");
   const layout = document.querySelector(".chat-layout");
   const resizer = document.querySelector("[data-sidebar-resizer]");
+  const scroller = list?.closest(".conversation") || list?.parentElement;
 
   if (!form || !input || !list) return;
 
@@ -36,8 +37,35 @@
     VALIDATION_ERROR: `질문은 공백을 제외하고 1자 이상 ${MAX_LENGTH}자 이하로 입력해 주세요.`,
   };
 
+  // While waiting for an answer, a spinner shows first; after this delay random texts take over.
+  const LOADING_FIRST_DELAY = 3000;
+  const LOADING_TEXT_INTERVAL = 3000;
+  const LOADING_FADE = 350;
+
+  // Same name as the profile (email part before @), filled in by loadCurrentUser.
+  let displayName = userLabel?.textContent.trim() || "게스트";
+
+  const loadingTexts = (name) => [
+    "너는 승마장 출입 금지야. 너만 보면 말이 안 나와서…",
+    "너 린스 안 써도 되겠다. 나만의 프린스니까.",
+    "너 린스 안 써도 되겠다. 나만의 프린세스니까.",
+    "이기자를 거꾸로 말하면 뭔지 알아?",
+    `${name} 귀여울 때마다 벽 치다가 우리 집 원룸 됐어.`,
+    "너 요즘 밴드한다며? 마이 허스밴드",
+    `${name}은 물복임? 딱복임? 아니면 내 삶에 찾아온 행복이자 축복임?`,
+    `너 굴 좋아해? 난 좋아해 ${name} 얼굴`,
+    `${name} 때문에 비 올 것 같아. 내 심장마비.`,
+    "너 타지에서 왔지? 내 마음을 흔드는 판타지.",
+    `${name} 쿨톤이야 웜톤이야? 아니면 내 평생의 완주하지 못할 사랑의 마라톤이야?`,
+  ];
+
   let history = [];
-  let sending = false;
+  const state = {
+    busy: false,
+    loadingTransitionTimer: null,
+    loadingTipTimer: null,
+    loadingTipIndex: -1,
+  };
 
   const setStatus = (text, isError = false) => {
     if (!status) return;
@@ -74,8 +102,22 @@
     return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("ko-KR");
   };
 
+  // Only the message area scrolls, so moving its scrollTop never moves the page.
   const scrollToBottom = () => {
-    list.lastElementChild?.scrollIntoView({ block: "end" });
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  };
+
+  // 새로고침하면 브라우저가 이전 스크롤 위치를 되살리려 하는데, 기록이 다 그려지기 전에
+  // 위치를 잡아서 대화 중간쯤에 멈추는 일이 있었다. 그래서 자동 복원은 끄고,
+  // 처음 기록을 그린 뒤에는 레이아웃이 끝난 다음 차례(setTimeout 0)에 한 번 더 맨 아래로 내린다.
+  if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+  let historyRestored = false;
+
+  const restoreHistory = () => {
+    scrollToBottom();
+    if (historyRestored) return;
+    historyRestored = true;
+    setTimeout(() => scrollToBottom(), 0);
   };
 
   // The server puts "˗ˋˏ name ˎˊ˗" on the first line when it recommends a star.
@@ -174,7 +216,7 @@
       history = Array.isArray(body?.items) ? body.items : [];
       renderHistory();
       renderSidebar();
-      scrollToBottom();
+      restoreHistory();
     } catch (error) {
       if (error.status === 401) {
         goToLogin(error);
@@ -225,6 +267,7 @@
       });
       const user = await readResponse(response);
       const name = user.email.split("@")[0];
+      displayName = name;
       if (userLabel) userLabel.textContent = name;
       if (userAvatar) userAvatar.textContent = name.charAt(0).toUpperCase();
       if (userEmail) userEmail.textContent = user.email;
@@ -294,7 +337,7 @@
   });
 
   const setSending = (value) => {
-    sending = value;
+    state.busy = value;
     if (sendButton) sendButton.disabled = value;
     form.setAttribute("aria-busy", String(value));
     document.querySelectorAll("[data-suggestion]").forEach((button) => { button.disabled = value; });
@@ -303,13 +346,74 @@
   // Python counts code points, so count them the same way (emoji are 1 char, not 2).
   const countChars = (value) => [...value].length;
 
+  const stopLoadingIndicator = () => {
+    clearTimeout(state.loadingTransitionTimer);
+    clearTimeout(state.loadingTipTimer);
+    state.loadingTransitionTimer = null;
+    state.loadingTipTimer = null;
+  };
+
+  // Pending answer row: spinner + "답변을 준비하고 있어요…", then random texts every 3 seconds.
+  const startLoadingIndicator = (pending) => {
+    stopLoadingIndicator();
+    pending.classList.add("is-pending");
+    pending.setAttribute("aria-busy", "true");
+    pending.setAttribute("role", "status");
+    pending.setAttribute("aria-live", "polite");
+    const spinner = document.createElement("span");
+    spinner.className = "loading-spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    const message = document.createElement("span");
+    message.className = "loading-text loading-message";
+    message.textContent = "답변을 준비하고 있어요…";
+    const tip = document.createElement("span");
+    tip.className = "loading-text loading-tip";
+    tip.hidden = true;
+    pending.replaceChildren(spinner, message, tip);
+
+    const texts = loadingTexts(displayName);
+    let firstTip = true;
+    state.loadingTipIndex = -1;
+
+    const showRandomLoadingTip = () => {
+      if (!state.busy) return;
+      // Fade the current text out, then swap it while it is invisible.
+      if (firstTip) message.classList.add("is-leaving");
+      tip.classList.remove("is-visible");
+      state.loadingTransitionTimer = setTimeout(() => {
+        if (!state.busy) return;
+        if (firstTip) message.hidden = true;
+        firstTip = false;
+        let index = Math.floor(Math.random() * texts.length);
+        while (texts.length > 1 && index === state.loadingTipIndex) {
+          index = Math.floor(Math.random() * texts.length);
+        }
+        state.loadingTipIndex = index;
+        tip.textContent = texts[index];
+        tip.hidden = false;
+        requestAnimationFrame(() => tip.classList.add("is-visible"));
+        state.loadingTipTimer = setTimeout(showRandomLoadingTip, LOADING_TEXT_INTERVAL);
+      }, LOADING_FADE);
+    };
+
+    state.loadingTipTimer = setTimeout(showRandomLoadingTip, LOADING_FIRST_DELAY);
+  };
+
+  const finishLoadingIndicator = (pending) => {
+    stopLoadingIndicator();
+    pending.classList.remove("is-pending");
+    pending.removeAttribute("aria-busy");
+    pending.removeAttribute("role");
+    pending.removeAttribute("aria-live");
+  };
+
   const resizeInput = () => {
     input.style.height = "auto";
     input.style.height = `${Math.min(input.scrollHeight, 150)}px`;
   };
 
   const submitMessage = async (text) => {
-    if (sending) return;
+    if (state.busy) return;
     const value = text.trim();
     if (!value) {
       setStatus("질문을 입력해 주세요.", true);
@@ -327,11 +431,10 @@
     addMessage(value, "user");
     input.value = "";
     resizeInput();
-    const pending = addMessage("답변을 준비하고 있어요…", "assistant");
-    pending.classList.add("is-pending");
-    pending.setAttribute("aria-busy", "true");
-    scrollToBottom();
+    const pending = addMessage("", "assistant");
     setSending(true);
+    startLoadingIndicator(pending);
+    scrollToBottom();
 
     try {
       const response = await fetch("/api/chat", {
@@ -341,8 +444,7 @@
         body: JSON.stringify({ message: value }),
       });
       const chat = await readResponse(response);
-      pending.classList.remove("is-pending");
-      pending.removeAttribute("aria-busy");
+      finishLoadingIndicator(pending);
       setAnswer(pending, chat.answer);
       pending.title = formatTime(chat.created_at);
       if (chat.saved && chat.id != null) {
@@ -356,6 +458,7 @@
         addNote("이 대화는 저장되지 않았어요. 새로고침하면 기록에 보이지 않습니다.");
       }
     } catch (error) {
+      finishLoadingIndicator(pending);
       if (error.status === 401) {
         goToLogin(error);
         return;
@@ -369,6 +472,7 @@
         resizeInput();
       }
     } finally {
+      stopLoadingIndicator();
       setSending(false);
       scrollToBottom();
       input.focus();
@@ -475,10 +579,28 @@
     });
   }
 
-  function setSidebarOpen(open) {
+  // The mobile sidebar remembers whether it was open, so a reload keeps the same screen.
+  const SIDEBAR_OPEN_KEY = "nsh.sidebarOpen";
+  const mobileQuery = window.matchMedia?.("(max-width: 720px)");
+
+  function setSidebarOpen(open, remember = true) {
     sidebar?.classList.toggle("is-open", open);
     menuToggle?.setAttribute("aria-expanded", String(open));
     menuToggle?.setAttribute("aria-label", open ? "대화 메뉴 닫기" : "대화 메뉴 열기");
+    if (!remember) return;
+    try {
+      window.localStorage.setItem(SIDEBAR_OPEN_KEY, open ? "1" : "0");
+    } catch {
+      // Storage can be blocked (private mode); the state just is not remembered.
+    }
+  }
+
+  try {
+    if (mobileQuery?.matches && window.localStorage.getItem(SIDEBAR_OPEN_KEY) === "1") {
+      setSidebarOpen(true, false);
+    }
+  } catch {
+    // Ignore unreadable storage and start with the sidebar closed.
   }
 
   function closeSidebar() {
