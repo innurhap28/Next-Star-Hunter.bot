@@ -26,8 +26,10 @@
 
   // Same limits as POST /api/chat (strip, 1..1000 chars).
   const MAX_LENGTH = 1000;
-  const HISTORY_LIMIT = 30;
-  const SIDEBAR_LIMIT = 20;
+  // GET /api/me/conversations allows 1..100; titles are cut at 40 chars like the server.
+  const CONVERSATION_LIMIT = 50;
+  const TITLE_LENGTH = 40;
+  const LAST_CONVERSATION_KEY = "nsh.lastConversation";
   const NETWORK_ERROR = "서버에 연결할 수 없습니다. FastAPI 서버에서 페이지를 열었는지 확인해 주세요.";
   const errorMessages = {
     AI_TIMEOUT: "현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
@@ -59,9 +61,11 @@
     `${name} 쿨톤이야 웜톤이야? 아니면 내 평생의 완주하지 못할 사랑의 마라톤이야?`,
   ];
 
-  let history = [];
+  let conversations = [];
   const state = {
     busy: false,
+    // Conversation shown in the message area; null means a new chat not saved yet.
+    currentId: null,
     loadingTransitionTimer: null,
     loadingTipTimer: null,
     loadingTipIndex: -1,
@@ -163,86 +167,172 @@
     return note;
   };
 
-  const renderSidebar = () => {
+  // Remember which conversation was open so a reload reopens it.
+  const remember = (id) => {
+    try {
+      if (id == null) window.localStorage.removeItem(LAST_CONVERSATION_KEY);
+      else window.localStorage.setItem(LAST_CONVERSATION_KEY, String(id));
+    } catch {
+      // Storage can be blocked (private mode); the last conversation just is not remembered.
+    }
+  };
+
+  const rememberedId = () => {
+    try {
+      const value = Number(window.localStorage.getItem(LAST_CONVERSATION_KEY));
+      return Number.isInteger(value) && value > 0 ? value : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // "방금 전", "5분 전", "3시간 전", "2일 전", then the date.
+  const formatRelative = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+    if (minutes < 1) return "방금 전";
+    if (minutes < 60) return `${minutes}분 전`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}시간 전`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}일 전`;
+    return date.toLocaleDateString("ko-KR");
+  };
+
+  // Same rule as the server: stripped message, first 40 chars + "…" if longer.
+  const titleFrom = (message) => {
+    const chars = [...message.trim()];
+    return chars.length > TITLE_LENGTH ? `${chars.slice(0, TITLE_LENGTH).join("")}…` : chars.join("");
+  };
+
+  const getJson = async (url) => {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    return readResponse(response);
+  };
+
+  const renderConversations = () => {
     if (!historyNav) return;
     historyNav.querySelectorAll(".history-entry").forEach((item) => item.remove());
-    const recent = history.slice(-SIDEBAR_LIMIT).reverse();
-    recent.forEach((chat) => {
+    conversations.forEach((conversation) => {
+      const isCurrent = conversation.id === state.currentId;
       const entry = document.createElement("div");
       entry.className = "history-entry";
+      entry.classList.toggle("is-current", isCurrent);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "history-item";
-      button.textContent = chat.question;
-      button.title = formatTime(chat.created_at);
-      button.addEventListener("click", () => showChat(chat.id));
+      if (isCurrent) button.setAttribute("aria-current", "true");
+      button.title = `${conversation.title}\n${formatTime(conversation.updated_at)}`;
+      const title = document.createElement("span");
+      title.className = "history-title";
+      title.textContent = conversation.title;
+      const time = document.createElement("span");
+      time.className = "history-time";
+      time.textContent = formatRelative(conversation.updated_at);
+      button.append(title, time);
+      button.addEventListener("click", () => openConversation(conversation.id));
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "history-delete";
       remove.textContent = "×";
-      remove.setAttribute("aria-label", `"${chat.question}" 대화 삭제`);
-      remove.title = "대화 삭제";
-      remove.addEventListener("click", () => deleteChat(chat.id, remove));
+      remove.setAttribute("aria-label", `"${conversation.title}" 대화방 삭제`);
+      remove.title = "대화방 삭제";
+      remove.addEventListener("click", () => deleteConversation(conversation.id, remove));
       entry.append(button, remove);
       historyNav.append(entry);
     });
-    if (historyEmpty) historyEmpty.hidden = recent.length > 0;
+    if (historyEmpty) historyEmpty.hidden = conversations.length > 0;
   };
 
-  const renderHistory = () => {
-    list.replaceChildren();
-    history.forEach((chat) => {
-      addMessage(chat.question, "user", { id: chat.id, chatId: chat.id, time: chat.created_at });
-      addMessage(chat.answer, "assistant", { chatId: chat.id, time: chat.created_at });
-    });
-    if (welcome) welcome.hidden = history.length > 0;
+  const loadConversations = async () => {
+    const body = await getJson(`/api/me/conversations?limit=${CONVERSATION_LIMIT}`);
+    conversations = Array.isArray(body?.items) ? body.items : [];
+    renderConversations();
   };
 
-  const showChat = (id) => {
-    if (!document.getElementById(`chat-${id}`)) renderHistory();
-    document.getElementById(`chat-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
-    closeSidebar();
-  };
-
-  const loadHistory = async () => {
-    // Sending waits for the history so the two never overlap on screen.
-    setSending(true);
+  // Refresh the list without stopping the screen; errors only go to the status line.
+  const refreshConversations = async () => {
     try {
-      const response = await fetch(`/api/me/chats?limit=${HISTORY_LIMIT}`, {
-        credentials: "same-origin",
-        headers: { Accept: "application/json" },
+      await loadConversations();
+    } catch (error) {
+      if (error.status === 401) {
+        goToLogin(error);
+        return;
+      }
+      setStatus(`대화 목록을 불러오지 못했어요. ${describeError(error)}`, true);
+    }
+  };
+
+  // "새 대화": empty message area, no current conversation. The next question makes a new one.
+  const startNewChat = () => {
+    state.currentId = null;
+    remember(null);
+    list.replaceChildren();
+    if (welcome) welcome.hidden = false;
+    renderConversations();
+  };
+
+  // The conversation is gone (deleted in another tab, for example): reload the list and start over.
+  const handleMissingConversation = async () => {
+    startNewChat();
+    await refreshConversations();
+    setStatus("대화방을 찾을 수 없어 새 대화를 시작했어요.", true);
+  };
+
+  const openConversation = async (id) => {
+    if (state.busy) return;
+    closeSidebar();
+    if (id === state.currentId && list.childElementCount > 0) return;
+    // Sending waits for the chats so the two never overlap on screen.
+    setSending(true);
+    setStatus("");
+    try {
+      const body = await getJson(`/api/me/conversations/${encodeURIComponent(id)}/chats`);
+      const items = Array.isArray(body?.items) ? body.items : [];
+      state.currentId = id;
+      remember(id);
+      list.replaceChildren();
+      items.forEach((chat) => {
+        addMessage(chat.question, "user", { id: chat.id, chatId: chat.id, time: chat.created_at });
+        addMessage(chat.answer, "assistant", { chatId: chat.id, time: chat.created_at });
       });
-      const body = await readResponse(response);
-      history = Array.isArray(body?.items) ? body.items : [];
-      renderHistory();
-      renderSidebar();
+      if (welcome) welcome.hidden = items.length > 0;
+      renderConversations();
       restoreHistory();
     } catch (error) {
       if (error.status === 401) {
         goToLogin(error);
         return;
       }
-      setStatus(`이전 대화를 불러오지 못했어요. ${describeError(error)}`, true);
+      if (error.code === "CONVERSATION_NOT_FOUND") {
+        await handleMissingConversation();
+        return;
+      }
+      setStatus(`대화를 불러오지 못했어요. ${describeError(error)}`, true);
     } finally {
       setSending(false);
     }
   };
 
-  const deleteChat = async (id, button) => {
-    if (!window.confirm("이 대화를 삭제할까요? 삭제한 대화는 되돌릴 수 없습니다.")) return;
+  const deleteConversation = async (id, button) => {
+    if (state.busy) return;
+    if (!window.confirm("이 대화방을 삭제할까요? 안의 대화도 모두 지워지고 되돌릴 수 없습니다.")) return;
     button.disabled = true;
     try {
-      const response = await fetch(`/api/me/chats/${encodeURIComponent(id)}`, {
+      const response = await fetch(`/api/me/conversations/${encodeURIComponent(id)}`, {
         method: "DELETE",
         credentials: "same-origin",
         headers: { Accept: "application/json" },
       });
       await readResponse(response);
-      history = history.filter((chat) => chat.id !== id);
-      list.querySelectorAll(`[data-chat-id="${id}"]`).forEach((item) => item.remove());
-      if (welcome) welcome.hidden = list.childElementCount > 0;
-      renderSidebar();
-      setStatus("대화를 삭제했어요.");
+      conversations = conversations.filter((conversation) => conversation.id !== id);
+      if (id === state.currentId) startNewChat();
+      else renderConversations();
+      setStatus("대화방을 삭제했어요.");
     } catch (error) {
       if (error.status === 401) {
         goToLogin(error);
@@ -250,13 +340,47 @@
       }
       button.disabled = false;
       if (error.status === 404) {
-        // Already gone (deleted in another tab, for example): show the current list again.
-        setStatus("이미 삭제된 대화예요. 목록을 새로 불러왔어요.");
-        loadHistory();
+        // Already gone: show the current list again.
+        if (id === state.currentId) startNewChat();
+        await refreshConversations();
+        setStatus("이미 삭제된 대화방이에요. 목록을 새로 불러왔어요.");
         return;
       }
-      setStatus(`대화를 삭제하지 못했어요. ${describeError(error)}`, true);
+      setStatus(`대화방을 삭제하지 못했어요. ${describeError(error)}`, true);
     }
+  };
+
+  // After an answer is saved: move (or add) its conversation to the top of the list.
+  const touchConversation = (id, question, time) => {
+    const found = conversations.find((conversation) => conversation.id === id);
+    const conversation = found || { id, title: titleFrom(question), created_at: time, chat_count: 0 };
+    conversation.updated_at = time;
+    conversation.chat_count = (conversation.chat_count || 0) + 1;
+    conversations = [conversation, ...conversations.filter((item) => item.id !== id)];
+    renderConversations();
+    // A new conversation gets its real title and times from the server.
+    if (!found) refreshConversations();
+  };
+
+  // First screen: the last opened conversation if it still exists, else the most recent one.
+  const loadInitialConversation = async () => {
+    setSending(true);
+    try {
+      await loadConversations();
+    } catch (error) {
+      if (error.status === 401) {
+        goToLogin(error);
+        return;
+      }
+      setStatus(`대화 목록을 불러오지 못했어요. ${describeError(error)}`, true);
+      return;
+    } finally {
+      setSending(false);
+    }
+    const saved = rememberedId();
+    const target = conversations.find((conversation) => conversation.id === saved) || conversations[0];
+    if (target) await openConversation(target.id);
+    else startNewChat();
   };
 
   const loadCurrentUser = async () => {
@@ -441,7 +565,7 @@
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ message: value }),
+        body: JSON.stringify({ message: value, conversation_id: state.currentId }),
       });
       const chat = await readResponse(response);
       finishLoadingIndicator(pending);
@@ -452,10 +576,13 @@
         question?.setAttribute("id", `chat-${chat.id}`);
         if (question) question.dataset.chatId = String(chat.id);
         pending.dataset.chatId = String(chat.id);
-        history.push({ id: chat.id, question: chat.question, answer: chat.answer, created_at: chat.created_at });
-        renderSidebar();
       } else {
         addNote("이 대화는 저장되지 않았어요. 새로고침하면 기록에 보이지 않습니다.");
+      }
+      if (chat.conversation_id != null) {
+        state.currentId = chat.conversation_id;
+        remember(chat.conversation_id);
+        touchConversation(chat.conversation_id, value, chat.created_at);
       }
     } catch (error) {
       finishLoadingIndicator(pending);
@@ -464,7 +591,12 @@
         return;
       }
       pending.remove();
-      addMessage(describeError(error), "error");
+      if (error.code === "CONVERSATION_NOT_FOUND") {
+        await handleMissingConversation();
+        setStatus("대화방을 찾을 수 없어 새 대화를 시작했어요. 질문을 다시 보내 주세요.", true);
+      } else {
+        addMessage(describeError(error), "error");
+      }
       if (error.code === "VALIDATION_ERROR") setStatus(errorMessages.VALIDATION_ERROR, true);
       // Put the question back so it can be sent again.
       if (!input.value) {
@@ -502,10 +634,10 @@
     button.addEventListener("click", () => submitMessage(button.dataset.suggestion || ""));
   });
 
-  // Only clears the screen; saved chats stay in the sidebar.
+  // Saved conversations stay in the sidebar; the next question starts a new one.
   document.querySelector("[data-new-chat]")?.addEventListener("click", () => {
-    list.replaceChildren();
-    if (welcome) welcome.hidden = false;
+    if (state.busy) return;
+    startNewChat();
     input.value = "";
     resizeInput();
     setStatus("");
@@ -632,5 +764,5 @@
   });
 
   loadCurrentUser();
-  loadHistory();
+  loadInitialConversation();
 })();
