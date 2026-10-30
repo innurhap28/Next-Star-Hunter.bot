@@ -17,8 +17,15 @@ from ..crud.chat_logs import recent_chat_pairs, save_chat_log
 from ..models import utc_now
 from .ai_client import AIError, ask_ai
 from .star_search import (
+    ANOTHER_RE,
+    ASK_PICK_RE,
+    REFER_RE,
     StarSearchResult,
+    answered_star,
+    display_name,
+    find_star,
     format_reference,
+    parse_query,
     remove_source_lines,
     remove_title_lines,
     search_stars,
@@ -31,7 +38,8 @@ CONTEXT_PAIRS = 5
 # Picks the one star to recommend. Tests replace it with a seeded random.Random.
 rng = random.Random()
 
-__all__ = ["AIError", "CONTEXT_PAIRS", "ChatResult", "answer_question", "pick_star"]
+__all__ = ["AIError", "CONTEXT_PAIRS", "ChatResult", "answer_question", "follow_up_mode",
+           "pick_star"]
 
 
 @dataclass
@@ -44,12 +52,19 @@ class ChatResult:
     saved: bool
 
 
-def pick_star(found: StarSearchResult, chooser=None) -> StarSearchResult:
+def pick_star(found: StarSearchResult, chooser=None, exclude=()) -> StarSearchResult:
     """Keep one random star from the search result.
 
     The group or the compared star is skipped when other stars exist, and stars whose
-    chunks contain a content keyword are preferred over the rest.
+    chunks contain a content keyword are preferred over the rest. Stars in exclude
+    (titles or display names already recommended) are never picked.
     """
+    if exclude:
+        skip = set(exclude)
+        stars = [s for s in found.stars
+                 if s["title"] not in skip and display_name(s["title"]) not in skip]
+        found = StarSearchResult(stars=stars, missing_keywords=found.missing_keywords,
+                                 conditions=found.conditions)
     if len(found.stars) <= 1:
         return found
     pool = [s for s in found.stars if not s.get("anchor")] or found.stars
@@ -59,16 +74,63 @@ def pick_star(found: StarSearchResult, chooser=None) -> StarSearchResult:
                             conditions=found.conditions)
 
 
+def follow_up_mode(message: str, previous_star: Optional[str]) -> str:
+    """How to pick the star for a question after an answer that recommended one.
+
+    'another': asks for a different person, so search again without the stars already
+    recommended. 'same': refers back ('그 사람', '걔') to the previous star. 'same_unless_named':
+    no new conditions, so keep the previous star unless the question names another star.
+    'search': new conditions, or nothing was recommended before.
+    """
+    if ANOTHER_RE.search(message):
+        return "another"
+    if not previous_star:
+        return "search"
+    if REFER_RE.search(message):
+        return "same"
+    q = parse_query(message)
+    if q.structured() or q.similar or (q.keywords and ASK_PICK_RE.search(message)):
+        return "search"
+    return "same_unless_named"
+
+
+def _condition_question(history) -> Optional[str]:
+    """The latest question with structured conditions (else the latest question)."""
+    for log in reversed(history):
+        if parse_query(log.question).structured():
+            return log.question
+    return history[-1].question if history else None
+
+
+def _find_reference(engine, message: str, history, request_id: str) -> StarSearchResult:
+    previous_star = answered_star(history[-1].answer) if history else None
+    mode = follow_up_mode(message, previous_star)
+    if mode in ("same", "same_unless_named"):
+        found = find_star(engine, previous_star, message, request_id=request_id,
+                          unless_other_named=mode == "same_unless_named")
+        if found is not None:
+            logger.info("star_pick request_id=%s mode=%s", request_id, mode)
+            return found
+        # the previous star is not in the data (or another star is named): search as usual
+        mode = "search"
+    exclude: tuple[str, ...] = ()
+    if mode == "another":
+        recommended = (answered_star(log.answer) for log in history)
+        exclude = tuple(dict.fromkeys(t for t in recommended if t))
+    logger.info("star_pick request_id=%s mode=%s", request_id, mode)
+    found = search_stars(engine, message, _condition_question(history),
+                         request_id=request_id, exclude=exclude)
+    return pick_star(found, exclude=exclude)
+
+
 def answer_question(db: Session, settings, user_id: int, message: str, *,
                     request_id: str, transport=None) -> ChatResult:
     """Answer one question and save it. Raises AIError when the AI call fails."""
     history = recent_chat_pairs(db, user_id, CONTEXT_PAIRS)
-    previous = history[-1].question if history else None
     # Star data lookup never raises; with no data the AI answers without references.
     found = StarSearchResult()
     if settings.llm_configured():
-        found = pick_star(search_stars(db.get_bind(), message, previous,
-                                       request_id=request_id))
+        found = _find_reference(db.get_bind(), message, history, request_id)
     # Message text and answers are never logged; only ids, timing, and error codes.
     logger.info("ai_call_start user_id=%s request_id=%s", user_id, request_id)
     started = time.monotonic()
