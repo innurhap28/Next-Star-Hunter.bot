@@ -553,8 +553,8 @@ _TITLE_LINE = re.compile(r"^\s*˗ˋˏ .* ˎˊ˗\s*$")
 
 
 def display_name(title: str) -> str:
-    """Document title without the parenthesized part ('산들(가수)' -> '산들')."""
-    return re.sub(r"\s*\([^)]*\)", "", title).strip() or title
+    """Document title without the trailing disambiguation ('산들(가수)' -> '산들')."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", title).strip() or title
 
 
 def title_line(title: str) -> str:
