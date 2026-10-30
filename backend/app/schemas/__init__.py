@@ -5,6 +5,7 @@ Names are re-exported here so `from app.schemas import ...` keeps working.
 from .admin import AdminChatItem, AdminChatList, AdminStats, AdminUserItem, AdminUserList
 from .auth import Credentials, MePublic, UserPublic
 from .chat import ChatRequest, ChatResponse
+from .conversations import ConversationChats, ConversationItem, ConversationList, ConversationRef
 from .errors import ErrorResponse, ValidationErrorResponse
 from .logs import ChatHistoryResponse, ChatLogItem
 
@@ -18,6 +19,10 @@ __all__ = [
     "ChatLogItem",
     "ChatRequest",
     "ChatResponse",
+    "ConversationChats",
+    "ConversationItem",
+    "ConversationList",
+    "ConversationRef",
     "Credentials",
     "ErrorResponse",
     "MePublic",
