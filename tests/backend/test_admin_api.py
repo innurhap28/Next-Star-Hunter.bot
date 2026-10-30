@@ -85,13 +85,22 @@ def test_seed_creates_admin_once_and_never_overwrites_password(factory):
     assert ADMIN["password"] not in users[0].password_hash
 
 
-def test_seed_keeps_existing_account_registered_by_signup(factory):
-    with client_for(factory) as client:
-        client.post("/api/auth/register", json={**ADMIN, "password": "signup-password-789"})
-    assert seed_admin(factory, make_settings()) == "exists"
+@pytest.mark.parametrize("changes", [{}, {"ADMIN_PASSWORD": ""}, {"ADMIN_PASSWORD": "short12"}])
+def test_register_rejects_admin_email_even_before_seed(factory, changes):
+    with client_for(factory, **changes) as client:
+        response = client.post("/api/auth/register", json={
+            "email": "Admin@Example.com", "password": "signup-password-789"})
+    assert response.status_code == 409
+    assert response.json() == {"error": "EMAIL_EXISTS", "message": "이미 가입된 이메일입니다."}
     with factory() as db:
-        row = db.scalar(select(User))
-    assert verify_password("signup-password-789", row.password_hash)
+        assert db.scalar(select(User)) is None
+
+
+def test_register_allows_any_email_when_admin_email_is_empty(factory):
+    with client_for(factory, ADMIN_EMAIL="") as client:
+        response = client.post("/api/auth/register",
+                               json={**ADMIN, "password": "signup-password-789"})
+    assert response.status_code == 201
 
 
 def test_seed_normalizes_email_case(factory):

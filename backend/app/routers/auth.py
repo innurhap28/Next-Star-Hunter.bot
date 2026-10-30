@@ -20,7 +20,10 @@ DUMMY_HASH = hash_password("not-a-login-password")
              responses=REGISTER_ERRORS)
 def register(body: Credentials, request: Request, db=Depends(get_db)):
     email = str(body.email)
-    if get_user_by_email(db, email) is not None:
+    # The ADMIN_EMAIL account is created only by init_db; answer like a taken email.
+    admin_email = request.app.state.settings.admin_email()
+    is_admin_email = bool(admin_email) and email.casefold() == admin_email
+    if is_admin_email or get_user_by_email(db, email) is not None:
         raise HTTPException(409, {"error": "EMAIL_EXISTS", "message": "이미 가입된 이메일입니다."})
     try:
         user = create_user(db, email, hash_password(body.password))
