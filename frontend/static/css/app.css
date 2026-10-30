@@ -57,6 +57,8 @@ button { color: inherit; }
 .auth-form button:disabled, .topbar-link:disabled { cursor: wait; opacity: .65; }
 .auth-footnote { margin: 4px 0 0; text-align: center; font-size: 11px; }
 .auth-caption { margin: 24px 0 0; color: #9a9187; font-size: 12px; }
+.auth-source { margin: 14px 0 0; color: #9a9187; font-size: 11px; text-align: center; }
+.auth-source a { color: inherit; text-decoration: underline; }
 
 /* Chat */
 .chat-layout { --sidebar-width: 264px; display: grid; min-height: 100vh; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
